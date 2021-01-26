@@ -6,9 +6,9 @@ Require Coq.setoid_ring.Ncring.
 Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.setoid_ring.Algebra_syntax.
 
-From PLF Require Import Maps.
+From STLCZK Require Import Maps.
 
-Module STLCRingCompiler.
+Module StlcRing.
   
   Local Open Scope string_scope.
   Context {R: Type}`{Coq.setoid_ring.Ncring.Ring_ops R}.
@@ -89,7 +89,6 @@ Module STLCRingCompiler.
                        y custom stlc at level 99,
                        z custom stlc at level 99,
                        left associativity).
-  
   Coercion tm_rc : R >-> tm.
   Coercion tm_boolc : bool >-> tm.
 
@@ -131,6 +130,14 @@ Module STLCRingCompiler.
   | v_r : forall n : R,
       value <{n}>.
 
+  (** Big-step semantics *)
+  Inductive multi {X : Type} (R : relation X) : relation X :=
+  | multi_refl : forall (x : X), multi R x x
+  | multi_step : forall (x y z : X),
+                    R x y ->
+                    multi R y z ->
+                    multi R x z.
+ 
   Reserved Notation "t '-->' t'" (at level 40).
   
   Inductive step : tm -> tm -> Prop :=
@@ -189,13 +196,6 @@ Module STLCRingCompiler.
   |ST_If_false: forall t2 t3,<{if {false} then t2 else t3}> --> t3
   where "t '-->' t'" := (step t t').
                   
-(** Big-step semantics *)
-Inductive multi {X : Type} (R : relation X) : relation X :=
-  | multi_refl : forall (x : X), multi R x x
-  | multi_step : forall (x y z : X),
-                    R x y ->
-                    multi R y z ->
-                    multi R x z.
 
 Notation multistep := (multi step).
 Notation "t1 '-->*' t2" := (multistep t1 t2) (at level 40).
@@ -283,7 +283,6 @@ Proof.
   discriminate.
 Qed.
 
-
 Lemma substitution_preserves_typing : forall Gamma x U t v T,
   (x |-> U ; Gamma) |- t \in T ->
   empty |- v \in U   ->
@@ -333,4 +332,4 @@ Proof.
       apply IHG. assumption.
 Qed.
 
-End STLCRingCompiler.
+End StlcRing.
