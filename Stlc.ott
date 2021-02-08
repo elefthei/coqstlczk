@@ -1,0 +1,181 @@
+metavar expvar, x, y, z ::= {{ repr-locally-nameless }}
+metavar n ::= {{ coq nat }} {{ coq-equality }} {{ lex numeral }}
+
+grammar
+
+typ, T, S :: '' ::=
+  | bool     ::   :: bool
+  | field    ::   :: field
+  | T1 -> T2 ::   :: arrow
+
+const, c :: const_ ::=
+  | true  :: :: true
+  | false :: :: false
+  | n     :: :: field
+
+op, binop :: '' ::=
+  | +  :: :: add {{ coq + }}
+  | -  :: :: sub {{ coq - }}
+  | *  :: :: mul {{ coq * }}
+  | /  :: :: div {{ coq / }}
+  | && :: :: and {{ coq andb }} {{ tex \land }}
+  | || :: :: or  {{ coq orb }} {{ tex \lor }}
+
+exp, e, f, g :: '' ::=
+  | x                      ::   :: var
+  | \ x : T . e            ::   :: abs (+ bind x in e +)
+  | e1 e2                  ::   :: app
+  | let x := e1 in e2      ::   :: let (+ bind x in e2 +)
+  | const                  ::   :: const
+  | e1 op e2               ::   :: binop
+  | not e                  ::   :: not
+  | if e then e1 else e2   ::   :: ifthenelse
+  | ( e )                  :: S :: paren {{ coq ([[e]]) }}
+  | { e2 / x } e1          :: M :: subst {{ coq (open_exp_wrt_exp [[x e1]] [[e2]]) }}
+
+substitutions
+  single e x :: subst
+
+freevars
+  e x :: fv
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+grammar
+
+typing_env, G, F, E :: '' ::= {{ coq list (atom*typ) }}
+  | empty     ::   :: empty {{ coq nil }}
+  | G , x : T ::   :: cons  {{ coq ([[x]]~[[T]] ++ [[G]]) }}
+
+
+value, v :: value_ ::=
+  | \ x : T . e :: :: abs (+ bind x in e +)
+  | const       :: :: const 
+  
+formula :: formula_ ::=
+  | judgement      ::   :: judgement
+  | ( x : T ) in G ::   :: binds {{ coq binds ([[x]]) ([[T]]) ([[G]]) }}
+  | uniq G         ::   :: uniq  {{ coq uniq ([[G]]) }}
+
+subrules
+  v <:: e
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+Jtyping :: '' ::=
+
+defn
+G |- e : T
+:: :: typing :: typing_ by
+
+(x:T) in G
+uniq G
+----------- :: var
+G |- x : T
+
+G, x : T1 |- e : T2
+------------------------ :: abs
+G |- \x:T1.e : T1 -> T2
+
+G |- e1 : T1 -> T2
+G |- e2 : T1
+------------------- :: app
+G |- e1 e2 : T2
+
+------------------ :: true
+G |- true: bool
+
+------------------ :: false
+G |- false: bool
+
+--------------- :: field
+G |- n: field
+
+G |- e1: bool
+G |- e2: bool
+---------------------- :: boolop
+G |- e1 op e2: bool
+
+G |- e: bool
+---------------- :: boolnot
+G |- not e: bool
+
+G |- e1: field
+G |- e2: field
+---------------------- :: fieldop
+G |- e1 op e2: field
+
+G |- e: bool
+G |- e1: T
+G |- e2: T
+------------------------------ :: if
+G |- if e then e1 else e2 : T
+
+G |- e1: T1
+G, x: T1 |- e2: T2
+--------------------------- :: let
+G |- let x:= e1 in e2 : T2
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+Jop :: '' ::=
+
+defn
+e1 --> e2
+:: :: step :: step_ by
+
+e1 --> e1'
+----------------- :: app_1
+e1 e2 --> e1' e2
+
+e2 --> e2'
+----------------- :: app_2
+v1 e2 --> v1 e2'
+
+----------------------------- :: beta
+(\x:T.e1) v2 --> {v2 / x} e1
+
+--------------------------- :: if_true
+if true then e1 else e2 --> e1
+
+--------------------------- :: if_false
+if false then e1 else e2 --> e2
+
+------------------ :: not_true
+not true --> false
+
+------------------ :: not_false
+not false --> true
+
+----------------------------- :: let_v
+let x := v1 in e2 -->  { v1 / x } e2 
+
+e1 --> e1'
+---------------------------------- :: let
+let x := e1 in e2 --> let x := e1' in e2
+
+------------------- :: and_1
+(e && true) --> e
+
+------------------- :: and_2
+(true && e) --> e
+
+------------------- :: and_3
+(e && false) --> false
+
+------------------- :: and_4
+(false && e) --> false
+
+------------------- :: or_1
+(e1 || true) --> true
+
+------------------- :: or_2
+(true || e1) --> true
+
+------------------- :: or_3
+(e1 || false) --> e1
+
+------------------- :: or_4
+(false || e1) --> e1
