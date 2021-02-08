@@ -3,25 +3,25 @@ metavar n ::= {{ coq nat }} {{ coq-equality }} {{ lex numeral }}
 
 grammar
 
-typ, T, S :: '' ::=
+typ, T, S :: ty_ ::= {{ coq-equality }}
   | bool     ::   :: bool
   | field    ::   :: field
   | T1 -> T2 ::   :: arrow
 
-const, c :: const_ ::=
+const, c :: const_ ::= {{ coq-equality }}
   | true  :: :: true
   | false :: :: false
   | n     :: :: field
 
-op, binop :: '' ::=
+op, binop :: tm_ ::= {{ coq-equality }}
   | +  :: :: add {{ coq + }}
   | -  :: :: sub {{ coq - }}
   | *  :: :: mul {{ coq * }}
   | /  :: :: div {{ coq / }}
-  | && :: :: and {{ coq andb }} {{ tex \land }}
-  | || :: :: or  {{ coq orb }} {{ tex \lor }}
+  | && :: :: and {{ tex \land }}
+  | || :: :: or  {{ tex \lor }}
 
-exp, e, f, g :: '' ::=
+exp, e, f, g :: tm_ ::= {{ coq-equality }}
   | x                      ::   :: var
   | \ x : T . e            ::   :: abs (+ bind x in e +)
   | e1 e2                  ::   :: app
