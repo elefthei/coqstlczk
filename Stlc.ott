@@ -1,5 +1,5 @@
 metavar expvar, x, y, z ::= {{ repr-locally-nameless }}
-metavar n ::= {{ coq nat }} {{ coq-equality }} {{ lex numeral }}
+metavar nat, n ::= {{ coq nat }} {{ coq-equality }} {{ lex numeral }}
 
 grammar
 
@@ -8,7 +8,7 @@ typ, T, S :: ty_ ::= {{ coq-equality }}
   | field    ::   :: field
   | T1 -> T2 ::   :: arrow
 
-const, c :: const_ ::= {{ coq-equality }}
+constant, c :: const_ ::= {{ coq-equality }}
   | true  :: :: true
   | false :: :: false
   | n     :: :: field
@@ -20,14 +20,15 @@ op, binop :: tm_ ::= {{ coq-equality }}
   | /  :: :: div {{ coq / }}
   | && :: :: and {{ tex \land }}
   | || :: :: or  {{ tex \lor }}
-
+  
 exp, e, f, g :: tm_ ::= {{ coq-equality }}
   | x                      ::   :: var
   | \ x : T . e            ::   :: abs (+ bind x in e +)
   | e1 e2                  ::   :: app
   | let x := e1 in e2      ::   :: let (+ bind x in e2 +)
-  | const                  ::   :: const
+  | constant               ::   :: constant
   | e1 op e2               ::   :: binop
+  | e1 == e2               ::   :: eq
   | not e                  ::   :: not
   | if e then e1 else e2   ::   :: ifthenelse
   | ( e )                  :: S :: paren {{ coq ([[e]]) }}
@@ -50,16 +51,21 @@ typing_env, G, F, E :: '' ::= {{ coq list (atom*typ) }}
 
 value, v :: value_ ::=
   | \ x : T . e :: :: abs (+ bind x in e +)
-  | const       :: :: const 
+  | constant    :: :: constant 
   
 formula :: formula_ ::=
   | judgement      ::   :: judgement
   | ( x : T ) in G ::   :: binds {{ coq binds ([[x]]) ([[T]]) ([[G]]) }}
   | uniq G         ::   :: uniq  {{ coq uniq ([[G]]) }}
-
+  | n1 + n2        :: M :: add_constant {{ coq [[n1]] + [[n2]] }}
+  | n1 - n2        :: M :: sub_constant {{ coq [[n1]] + [[n2]] }}
+  | n1 * n2        :: M :: mul_constant {{ coq [[n1]] + [[n2]] }}
+  | n1 / n2        :: M :: div_constant {{ coq [[n1]] + [[n2]] }}
+  | c1 == c2       :: M :: eq_constant {{ coq [[c1]] === [[c2]] }}
+  
 subrules
   v <:: e
-
+  
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 defns
@@ -106,6 +112,11 @@ G |- e2: field
 ---------------------- :: fieldop
 G |- e1 op e2: field
 
+G |- e1: T
+G |- e2: T
+--------------------- :: eqop
+G |- e1 == e2: bool
+
 G |- e: bool
 G |- e1: T
 G |- e2: T
@@ -126,6 +137,8 @@ defn
 e1 --> e2
 :: :: step :: step_ by
 
+%% Lambda
+
 e1 --> e1'
 ----------------- :: app_1
 e1 e2 --> e1' e2
@@ -137,24 +150,20 @@ v1 e2 --> v1 e2'
 ----------------------------- :: beta
 (\x:T.e1) v2 --> {v2 / x} e1
 
+%% If
+
 --------------------------- :: if_true
 if true then e1 else e2 --> e1
 
 --------------------------- :: if_false
 if false then e1 else e2 --> e2
 
+%% Bool
 ------------------ :: not_true
 not true --> false
 
 ------------------ :: not_false
 not false --> true
-
------------------------------ :: let_v
-let x := v1 in e2 -->  { v1 / x } e2 
-
-e1 --> e1'
----------------------------------- :: let
-let x := e1 in e2 --> let x := e1' in e2
 
 ------------------- :: and_1
 (e && true) --> e
@@ -179,3 +188,33 @@ let x := e1 in e2 --> let x := e1' in e2
 
 ------------------- :: or_4
 (false || e1) --> e1
+
+%% Let
+
+----------------------------- :: let_v
+let x := v1 in e2 -->  { v1 / x } e2 
+
+e1 --> e1'
+---------------------------------- :: let_cog
+let x := e1 in e2 --> let x := e1' in e2
+
+%% binop
+e1 --> e1'
+----------------------- :: binop_cog_1
+e1 op e2 --> e1' op e2
+
+e2 --> e2'
+----------------------- :: binop_cog_2
+c1 op e2 --> c1 op e2'
+
+%% Equality
+e1 --> e1'
+----------------------- :: eq_cog_1
+e1 == e2 --> e1' == e2
+
+e2 --> e2'
+----------------------- :: eq_cog_2
+c1 == e2 --> c1 == e2'
+
+----------------- :: eq_refl
+c == c --> true
