@@ -1,16 +1,16 @@
 From STLCZK Require Import Stlc_Manual.
+
 Require Import Metalib.Metatheory.
 From STLCZK Require Import GaloisField.
 
-Module Gadgets (Import M: StlcGaloisField).
+Module Gadgets (Import M: StlcNat).
 
   Definition X : atom := fresh nil.
   Definition Y : atom := fresh (X :: nil).
-  Definition one := M.one.
   
   (** Notation on Stlc_Ott *)
   Coercion tm_var_f: expvar >-> exp.
-  Coercion const_field: F >-> constant.
+  Coercion const_field: nat >-> constant.
   Coercion tm_constant: constant >-> exp.
   
   Declare Custom Entry stlc_ty.
@@ -73,7 +73,7 @@ Module Gadgets (Import M: StlcGaloisField).
   Notation " t '-->*' t' " := (multi step t t') (at level 40).
   
   Definition circuit_equiv(c: exp) (c': exp): Prop :=
-    forall (n: F), exists (w: F),
+    forall (n: nat), exists (w: nat),
         <{ c' n w }> -->* const_true <->
         <{ c n }> -->* w.
   
@@ -81,18 +81,36 @@ Module Gadgets (Import M: StlcGaloisField).
 
   (** Example *)
   Definition div :=
-    <{ \_: Field, (one / #1) }>.
+    <{ \_: Field, (1 / #1) }>.
 
   Definition div_check :=
     <{ \_: Field,
            <{ \_: Field,
-                  #1 * #2 == one }>
+                  #1 * #2 == 1 }>
      }>.
 
+  Ltac invert H := inversion H; subst; clear H.
   Theorem div_gadget_proof: div ~ div_check.
   Proof.
     unfold circuit_equiv, div, div_check.
-    
-    Fail induction 0. (** Is there induction *)
+    intros.
+    eexists.
+    split.
+    - (* -> *) induction n; intro H.
+      + invert H.
+        invert H0.
+        invert H5.
+        invert H2.
+        invert H3.
+        invert H6.
+        invert H7.
+        
+        inversion H0; subst.
+        inversion H4. subst.
+        * apply step_beta; try constructor.
+          
+   constructor. admit.
+        eauto 12.
+    - 
   Admitted.
       

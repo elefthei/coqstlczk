@@ -5,21 +5,12 @@ Require Import Metalib.Metatheory.
 Require Import List.
 Require Import Ott.ott_list_core.
 
-Require Coq.setoid_ring.Ncring.
-Require Import Coq.Relations.Relation_Definitions.
-Require Import Coq.setoid_ring.Algebra_syntax.
-From STLCZK Require Import GaloisField.
-
-Module Type StlcGaloisField.
-
-  Parameter prime: nat.
-  Context {F: Set}`{GaloisField F prime}.
-
-  Definition one := (GaloisField.one).
-
+Module Type StlcNat.
+  
   (** syntax *)
   Definition expvar : Set := var.
-  Hint Resolve GaloisField.eqDec : ott_coq_equality.
+
+  Hint Resolve Coq.Arith.PeanoNat.Nat.eq_dec : ott_coq_equality.
 
   Inductive typ : Set := 
   | ty_bool : typ
@@ -29,7 +20,7 @@ Module Type StlcGaloisField.
   Inductive constant : Set := 
   | const_true : constant
   | const_false : constant
-  | const_field (n: F).
+  | const_field (n: nat).
 
   Inductive op : Set := 
   | tm_add : op
@@ -60,16 +51,7 @@ Module Type StlcGaloisField.
   
   Lemma eq_constant: forall (x y : constant), {x = y} + {x <> y}.
   Proof.
-    intros.
-    destruct x.
-    - decide equality; auto with ott_coq_equality arith.
-      + destruct y; exact (GaloisField.eqDec n n0).
-    - decide equality; auto with ott_coq_equality arith.
-      + destruct y; exact (GaloisField.eqDec n n0).
-    - destruct y; decide equality; auto with ott_coq_equality arith.
-      + exact (GaloisField.eqDec n0 n1).
-      + exact (GaloisField.eqDec n0 n1).
-      + exact (GaloisField.eqDec n1 n2).
+    decide equality; auto with ott_coq_equality arith.
   Defined.
   
   Hint Resolve eq_constant : ott_coq_equality.
@@ -207,7 +189,7 @@ Module Type StlcGaloisField.
       typing G (tm_constant const_true) ty_bool
   | typing_false : forall (G:typing_env),
       typing G (tm_constant const_false) ty_bool
-  | typing_field : forall (G:typing_env) (n: F),
+  | typing_field : forall (G:typing_env) (n: nat),
       typing G (tm_constant (const_field n)) ty_field
   | typing_boolop : forall (G:typing_env) (e1:exp) (op5:op) (e2:exp),
       typing G e1 ty_bool ->
@@ -312,28 +294,28 @@ Module Type StlcGaloisField.
   | step_eq_refl : forall (c:constant),
       step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant const_true)
   (** Manually added concrete arithmetic semantics *)
-  | step_add_n: forall (n1 n2: F),
+  | step_add_n: forall (n1 n2: nat),
       step (tm_binop (tm_constant (const_field n1))
                      tm_add
                      (tm_constant (const_field n2)))
-           (tm_constant (const_field [[n1 + n2]]))
-  | step_sub_n: forall (n1 n2: F),
+           (tm_constant (const_field (n1 + n2)))
+  | step_sub_n: forall (n1 n2: nat),
       step (tm_binop (tm_constant (const_field n1))
                      tm_sub
                      (tm_constant (const_field n2)))
-           (tm_constant (const_field [[n1 - n2]]))
-  | step_mul_n: forall (n1 n2: F),
+           (tm_constant (const_field (n1 - n2)))
+  | step_mul_n: forall (n1 n2: nat),
       step (tm_binop (tm_constant (const_field n1))
                      tm_mul
                      (tm_constant (const_field n2)))
-           (tm_constant (const_field [[n1 * n2]]))
-  | step_div_n: forall (n1 n2: F),
+           (tm_constant (const_field (n1 * n2)))
+  | step_div_n: forall (n1 n2: nat),
       step (tm_binop (tm_constant (const_field n1))
                      tm_div
                      (tm_constant (const_field n2)))
-           (tm_constant (const_field [[n1 / n2]])).
+           (tm_constant (const_field (n1 / n2))).
 
   (** infrastructure *)
   Hint Constructors typing step lc_exp : core.
 
-End StlcGaloisField.
+End StlcNat.
