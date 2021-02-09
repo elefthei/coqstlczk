@@ -289,8 +289,28 @@ Inductive step : exp -> exp -> Prop :=    (* defn step *)
      step e2 e2' ->
      step (tm_eq (tm_constant c1) e2) (tm_eq (tm_constant c1) e2')
  | step_eq_refl : forall (c:constant),
-     step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant const_true).
-
+     step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant const_true)
+ (** Manually added concrete arithmetic semantics *)
+ | step_add_n: forall (n1 n2: nat),
+     step (tm_binop (tm_constant (const_field n1))
+                    tm_add
+                    (tm_constant (const_field n2)))
+          (tm_constant (const_field (n1 + n2)))
+ | step_sub_n: forall (n1 n2: nat),
+     step (tm_binop (tm_constant (const_field n1))
+                    tm_sub
+                    (tm_constant (const_field n2)))
+         (tm_constant (const_field (n1 - n2)))
+ | step_mul_n: forall (n1 n2: nat),
+     step (tm_binop (tm_constant (const_field n1))
+                    tm_mul
+                    (tm_constant (const_field n2)))
+         (tm_constant (const_field (n1 * n2)))
+ | step_div_n: forall (n1 n2: nat),
+     step (tm_binop (tm_constant (const_field n1))
+                    tm_div
+                    (tm_constant (const_field n2)))
+         (tm_constant (const_field (n1 / n2))).
 
 (** infrastructure *)
 Hint Constructors typing step lc_exp : core.
