@@ -6,31 +6,23 @@ Require Import Ott.ott_list_core.
 (** syntax *)
 Definition expvar : Set := var.
 
-Lemma eq_nat: forall (x y : nat), {x = y} + {x <> y}.
-Proof.
-  decide equality; auto with ott_coq_equality arith.
-Defined.
-Hint Resolve eq_nat : ott_coq_equality.
-
-Inductive typ : Set := 
- | ty_bool : typ
- | ty_field : typ
- | ty_arrow (T1:typ) (T2:typ).
+Inductive op : Set := 
+ | op_add : op
+ | op_sub : op
+ | op_mul : op
+ | op_div : op
+ | op_and : op
+ | op_or : op.
 
 Inductive constant : Set := 
  | const_true : constant
  | const_false : constant
  | const_field (n:nat).
 
-Inductive op : Set := 
- | tm_add : op
- | tm_sub : op
- | tm_mul : op
- | tm_div : op
- | tm_and : op
- | tm_or : op.
-
-Definition typing_env : Set := list (atom*typ).
+Inductive typ : Set := 
+ | ty_bool : typ
+ | ty_field : typ
+ | ty_arrow (T1:typ) (T2:typ).
 
 Inductive exp : Set := 
  | tm_var_b (_:nat)
@@ -43,21 +35,24 @@ Inductive exp : Set :=
  | tm_eq (e1:exp) (e2:exp)
  | tm_not (e:exp)
  | tm_ifthenelse (e:exp) (e1:exp) (e2:exp).
-Lemma eq_typ: forall (x y : typ), {x = y} + {x <> y}.
-Proof.
-  decide equality; auto with ott_coq_equality arith.
-Defined.
-Hint Resolve eq_typ : ott_coq_equality.
-Lemma eq_constant: forall (x y : constant), {x = y} + {x <> y}.
-Proof.
-  decide equality; auto with ott_coq_equality arith.
-Defined.
-Hint Resolve eq_constant : ott_coq_equality.
+
+Definition typing_env : Set := list (atom*typ).
+
 Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
 Proof.
   decide equality; auto with ott_coq_equality arith.
 Defined.
 Hint Resolve eq_op : ott_coq_equality.
+Lemma eq_constant: forall (x y : constant), {x = y} + {x <> y}.
+Proof.
+  decide equality; auto with ott_coq_equality arith.
+Defined.
+Hint Resolve eq_constant : ott_coq_equality.
+Lemma eq_typ: forall (x y : typ), {x = y} + {x <> y}.
+Proof.
+  decide equality; auto with ott_coq_equality arith.
+Defined.
+Hint Resolve eq_typ : ott_coq_equality.
 Lemma eq_exp: forall (x y : exp), {x = y} + {x <> y}.
 Proof.
   decide equality; auto with ott_coq_equality arith.
@@ -243,28 +238,28 @@ Inductive step : exp -> exp -> Prop :=    (* defn step *)
      step (tm_not (tm_constant const_false)) (tm_constant const_true)
  | step_and_1 : forall (e:exp),
      lc_exp e ->
-     step  ( (tm_binop e tm_and (tm_constant const_true)) )  e
+     step  ( (tm_binop e op_and (tm_constant const_true)) )  e
  | step_and_2 : forall (e:exp),
      lc_exp e ->
-     step  ( (tm_binop (tm_constant const_true) tm_and e) )  e
+     step  ( (tm_binop (tm_constant const_true) op_and e) )  e
  | step_and_3 : forall (e:exp),
      lc_exp e ->
-     step  ( (tm_binop e tm_and (tm_constant const_false)) )  (tm_constant const_false)
+     step  ( (tm_binop e op_and (tm_constant const_false)) )  (tm_constant const_false)
  | step_and_4 : forall (e:exp),
      lc_exp e ->
-     step  ( (tm_binop (tm_constant const_false) tm_and e) )  (tm_constant const_false)
+     step  ( (tm_binop (tm_constant const_false) op_and e) )  (tm_constant const_false)
  | step_or_1 : forall (e1:exp),
      lc_exp e1 ->
-     step  ( (tm_binop e1 tm_or (tm_constant const_true)) )  (tm_constant const_true)
+     step  ( (tm_binop e1 op_or (tm_constant const_true)) )  (tm_constant const_true)
  | step_or_2 : forall (e1:exp),
      lc_exp e1 ->
-     step  ( (tm_binop (tm_constant const_true) tm_or e1) )  (tm_constant const_true)
+     step  ( (tm_binop (tm_constant const_true) op_or e1) )  (tm_constant const_true)
  | step_or_3 : forall (e1:exp),
      lc_exp e1 ->
-     step  ( (tm_binop e1 tm_or (tm_constant const_false)) )  e1
+     step  ( (tm_binop e1 op_or (tm_constant const_false)) )  e1
  | step_or_4 : forall (e1:exp),
      lc_exp e1 ->
-     step  ( (tm_binop (tm_constant const_false) tm_or e1) )  e1
+     step  ( (tm_binop (tm_constant const_false) op_or e1) )  e1
  | step_let_v : forall (e2 v1:exp),
      Is_true (is_value_of_exp v1) ->
      lc_exp (tm_let v1 e2) ->
@@ -281,6 +276,15 @@ Inductive step : exp -> exp -> Prop :=    (* defn step *)
  | step_binop_cog_2 : forall (c1:constant) (op5:op) (e2 e2':exp),
      step e2 e2' ->
      step (tm_binop (tm_constant c1) op5 e2) (tm_binop (tm_constant c1) op5 e2')
+ | step_add_const : forall (n1 n2:nat),
+     step (tm_binop (tm_constant (const_field n1)) op_add (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  +  n2 ) ))
+ | step_sub_const : forall (n1 n2:nat),
+     step (tm_binop (tm_constant (const_field n1)) op_sub (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  -  n2 ) ))
+ | step_mul_const : forall (n1 n2:nat),
+     step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  *  n2 ) ))
+ | step_div_const : forall (n1 n2:nat),
+      (const_field n2)  <>  (const_field  0 )  ->
+     step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  /  n2 ) ))
  | step_eq_cog_1 : forall (e1 e2 e1':exp),
      lc_exp e2 ->
      step e1 e1' ->
@@ -290,29 +294,10 @@ Inductive step : exp -> exp -> Prop :=    (* defn step *)
      step (tm_eq (tm_constant c1) e2) (tm_eq (tm_constant c1) e2')
  | step_eq_refl : forall (c:constant),
      step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant const_true)
- (** Manually added concrete arithmetic semantics *)
- | step_add_n: forall (n1 n2: nat),
-     step (tm_binop (tm_constant (const_field n1))
-                    tm_add
-                    (tm_constant (const_field n2)))
-          (tm_constant (const_field (n1 + n2)))
- | step_sub_n: forall (n1 n2: nat),
-     step (tm_binop (tm_constant (const_field n1))
-                    tm_sub
-                    (tm_constant (const_field n2)))
-         (tm_constant (const_field (n1 - n2)))
- | step_mul_n: forall (n1 n2: nat),
-     step (tm_binop (tm_constant (const_field n1))
-                    tm_mul
-                    (tm_constant (const_field n2)))
-         (tm_constant (const_field (n1 * n2)))
- | step_div_n: forall (n1 n2: nat),
-     step (tm_binop (tm_constant (const_field n1))
-                    tm_div
-                    (tm_constant (const_field n2)))
-         (tm_constant (const_field (n1 / n2))).
+ | step_eq_neq : forall (c1 c2:constant),
+      c1  <>  c2  ->
+     step (tm_eq (tm_constant c1) (tm_constant c2)) (tm_constant const_false).
+
 
 (** infrastructure *)
 Hint Constructors typing step lc_exp : core.
-
-

@@ -1,0 +1,10 @@
+--- Stlc_Bad.v	2021-02-15 18:53:03.000000000 -0500
++++ Stlc.v	2021-02-15 18:53:11.000000000 -0500
+@@ -38,7 +38,6 @@
+ 
+ Definition typing_env : Set := list (atom*typ).
+ 
+-Definition nat : Set := nat.
+ Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
+ Proof.
+   decide equality; auto with ott_coq_equality arith.

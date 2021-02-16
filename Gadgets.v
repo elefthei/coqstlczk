@@ -1,9 +1,7 @@
-From STLCZK Require Import Stlc_Manual.
-
 Require Import Metalib.Metatheory.
-From STLCZK Require Import GaloisField.
+From STLCZK Require Import Stlc.
 
-Module Gadgets (Import M: StlcNat).
+Module Gadgets.
 
   Definition X : atom := fresh nil.
   Definition Y : atom := fresh (X :: nil).
@@ -34,23 +32,22 @@ Module Gadgets (Import M: StlcNat).
   Notation "'Field'" := ty_field (in custom stlc_ty at level 0).
   Notation "'Bool'" := ty_bool (in custom stlc_ty at level 0).
 
-  Notation "x + y" := (tm_binop x tm_add y) (in custom stlc at level 2,
+  Notation "x + y" := (tm_binop x op_add y) (in custom stlc at level 2,
                                                 left associativity).
-  Notation "x - y" := (tm_binop x tm_sub y) (in custom stlc at level 2,
+  Notation "x - y" := (tm_binop x op_sub y) (in custom stlc at level 2,
                                                 left associativity).
 
-  Notation "x * y" := (tm_binop x tm_mul y) (in custom stlc at level 1,
+  Notation "x * y" := (tm_binop x op_mul y) (in custom stlc at level 1,
                                                 left associativity).
-  Notation "x / y" := (tm_binop x tm_div y) (in custom stlc at level 1,
+  Notation "x / y" := (tm_binop x op_div y) (in custom stlc at level 1,
                                                 left associativity).
-  Notation "x && y" := (tm_binop x tm_and y) (in custom stlc at level 2,
+  Notation "x && y" := (tm_binop x op_and y) (in custom stlc at level 2,
                                                  left associativity).
-  Notation "x || y" := (tm_binop x tm_or y) (in custom stlc at level 2,
+  Notation "x || y" := (tm_binop x op_or y) (in custom stlc at level 2,
                                                left associativity).
   Notation "x == y" := (tm_eq x y) (in custom stlc at level 1,
                                        left associativity).
   Notation "! x " := (tm_not x) (in custom stlc at level 1).
-
 
   Notation "'if' x 'then' y 'else' z" :=
     (tm_ifthenelse x y z) (in custom stlc at level 89,
@@ -79,38 +76,54 @@ Module Gadgets (Import M: StlcNat).
   
   Notation "a '~' b" := (circuit_equiv a b) (at level 50).
 
-  (** Example *)
+  (** Example 1: Division *)
   Definition div :=
     <{ \_: Field, (1 / #1) }>.
 
   Definition div_check :=
     <{ \_: Field,
-           <{ \_: Field,
-                  #1 * #2 == 1 }>
+           (\_: Field,
+                #1 * #2 == 1)
      }>.
 
   Ltac invert H := inversion H; subst; clear H.
-  Theorem div_gadget_proof: div ~ div_check.
+  Ltac solve := repeat match goal with
+                       | [ H: step _ _ |- _ ] => inversion H; subst; clear H
+                       | [ H: <{ (open_exp_wrt_exp _ _) }> -->* _ |- _ ] => cbn in H
+                       | [ H: ?P1 -->* ?P2 |- _ ] => inversion H; subst; clear H
+                       end.
+  
+  Theorem div_gadget_equiv: div ~ div_check.
   Proof.
     unfold circuit_equiv, div, div_check.
     intros.
-    eexists.
-    split.
-    - (* -> *) induction n; intro H.
-      + invert H.
-        invert H0.
-        invert H5.
-        invert H2.
-        invert H3.
-        invert H6.
-        invert H7.
-        
-        inversion H0; subst.
-        inversion H4. subst.
-        * apply step_beta; try constructor.
-          
-   constructor. admit.
-        eauto 12.
-    - 
-  Admitted.
-      
+    induction n.
+    - exists 0.
+      split; intro H; solve.
+    - exists 0. (** This is wrong in F_p but works in nat *)
+      split; intro H'; solve.
+  Qed.
+
+  (** Example 2: Conditional *)
+  Definition ite(c: constant):=
+    <{ \_: Field,
+           (\_: Field,
+                if #1 then #2 else #3
+           )
+     }>.
+  
+  Definition ite_check(c: constant) :=
+    <{ \_: Field,
+           (\_: Field,
+                (\_: Field,
+                     (#3 == #1 + c * (#2 - #1))
+                )
+           )
+     }>.
+
+  Theorem ite_equiv: forall c, ite c ~ ite_check c.
+  Proof.
+    destruct 0 eqn:Hc;
+      unfold circuit_equiv, ite, ite_check; induction 0; exists 0; split; intro H; solve.
+  Qed.
+     

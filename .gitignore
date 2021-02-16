@@ -32,6 +32,13 @@ nia.cache
 nlia.cache
 nra.cache
 
+# patch
+*.orig
+*.rej
+
+# emacs
+*~
+
 # generated timing files
 *.timing.diff
 *.v.after-timing

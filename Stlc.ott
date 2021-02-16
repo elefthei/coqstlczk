@@ -3,12 +3,12 @@ metavar expvar, x, y, z ::= {{ repr-locally-nameless }}
 grammar
 
 nat, n :: nat_ ::=          {{ coq nat }}
-  | 0           ::  :: zero {{ coq [0] }}
-  | [ n1 + n2 ] ::  :: add  {{ coq (Nat.plus [[n1]] [[n2]]) }}
-  | [ n1 - n2 ] ::  :: sub  {{ coq (Nat.sub [[n1]] [[n2]]) }}
-  | [ n1 * n2 ] ::  :: mul  {{ coq (Nat.mul [[n1]] [[n2]]) }}
-  | [ n1 / n2 ] ::  :: div  {{ coq (Nat.div [[n1]] [[n2]]) }}
-  
+  | [0]         ::  :: zero {{ coq [[0]] }}
+  | [ n1 + n2 ] ::  :: add  {{ coq ([[n1]] + [[n2]]) }}
+  | [ n1 - n2 ] ::  :: sub  {{ coq ([[n1]] - [[n2]]) }}
+  | [ n1 * n2 ] ::  :: mul  {{ coq ([[n1]] * [[n2]]) }}
+  | [ n1 / n2 ] ::  :: div  {{ coq ([[n1]] / [[n2]]) }}
+
 typ, T, S :: ty_ ::= {{ coq-equality }}
   | bool     ::   :: bool
   | field    ::   :: field
@@ -19,11 +19,11 @@ constant, c :: const_ ::= {{ coq-equality }}
   | false :: :: false
   | n     :: :: field
 
-op, binop :: tm_ ::= {{ coq-equality }}
-  | +  :: :: add {{ coq + }}
-  | -  :: :: sub {{ coq - }}
-  | *  :: :: mul {{ coq * }}
-  | /  :: :: div {{ coq / }}
+op, binop :: op_ ::= {{ coq-equality }}
+  | +  :: :: add
+  | -  :: :: sub
+  | *  :: :: mul
+  | /  :: :: div
   | && :: :: and {{ tex \land }}
   | || :: :: or  {{ tex \lor }}
   
@@ -218,7 +218,7 @@ n1 - n2 --> [ n1 - n2 ]
 ----------------------- :: mul_const
 n1 * n2 --> [ n1 * n2 ]
 
-n2 <> 0
+n2 <> [0]
 ----------------------- :: div_const
 n1 / n2 --> [ n1 / n2 ]
 
