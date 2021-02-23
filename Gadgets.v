@@ -1,6 +1,23 @@
 Require Import Metalib.Metatheory.
 From STLCZK Require Import Stlc.
 
+
+Section Foo.
+  Variable A: nat.
+  Definition bar(a: nat): Prop := a > A.
+  
+  Lemma L: exists n, bar n.
+  Proof.
+    exists (S A).
+    unfold bar.
+    auto.
+  Qed.
+
+End Foo.
+
+Check bar.
+
+
 Module Gadgets.
 
   Definition X : atom := fresh nil.
@@ -70,10 +87,10 @@ Module Gadgets.
   Notation " t '-->*' t' " := (multi step t t') (at level 40).
   
   Definition circuit_equiv(c: exp) (c': exp): Prop :=
-    forall (n: nat), exists (w: nat),
-        <{ c' n w }> -->* const_true <->
-        <{ c n }> -->* w.
-  
+    forall (n: nat), exists (ans: nat),
+        <{ c' n ans }> -->* const_true <->
+        <{ c n }> -->* ans.
+   
   Notation "a '~' b" := (circuit_equiv a b) (at level 50).
 
   (** Example 1: Division *)
@@ -104,11 +121,19 @@ Module Gadgets.
       split; intro H'; solve.
   Qed.
 
+  Fixpoint constant_to_boolnat(c: constant) : nat :=
+    match c with
+    | const_true => 1
+    | const_false => 0
+    | const_field 0 => 0
+    | const_field (S n) => 1
+    end.
+  
   (** Example 2: Conditional *)
   Definition ite(c: constant):=
     <{ \_: Field,
            (\_: Field,
-                if #1 then #2 else #3
+                if c then #2 else #3
            )
      }>.
   
@@ -116,7 +141,7 @@ Module Gadgets.
     <{ \_: Field,
            (\_: Field,
                 (\_: Field,
-                     (#3 == #1 + c * (#2 - #1))
+                     (#3 == #1 + {constant_to_boolnat c} * (#2 - #1))
                 )
            )
      }>.
@@ -126,4 +151,5 @@ Module Gadgets.
     destruct 0 eqn:Hc;
       unfold circuit_equiv, ite, ite_check; induction 0; exists 0; split; intro H; solve.
   Qed.
-     
+
+End Gadgets.     
