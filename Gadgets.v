@@ -73,13 +73,6 @@ Module Gadgets.
       multi R x z.
 
   Notation " t '-->*' t' " := (multi step t t') (at level 40).
-  
-  Definition circuit_equiv(c: exp) (c': exp): Prop :=
-    forall (n: Fp), exists (ans: Fp),
-        <{ c' n ans }> -->* const_true <->
-        <{ c n }> -->* ans.
-   
-  Notation "a '~' b" := (circuit_equiv a b) (at level 50).
 
   (** Example 1: Division *)
   Definition div :=
@@ -91,23 +84,61 @@ Module Gadgets.
                 #1 * #2 == ({const_field fp_one}))
      }>.
 
+  Definition circuit_equiv1(c: exp) (c': exp): Prop :=
+    forall (n: Fp), exists (ans: Fp),
+        <{ c' n ans }> -->* const_true <->
+        <{ c n }> -->* ans.
+   
+  Notation "a '~' b" := (circuit_equiv1 a b) (at level 50).
+
+
+  Definition circuit_equiv2(c: exp) (c': exp): Prop :=
+    forall (n: Fp), forall (ans: Fp),
+        <{ c' n ans }> -->* const_true <->
+        <{ c n }> -->* ans.
+   
+  Notation "a '~~' b" := (circuit_equiv2 a b) (at level 50).
+
   Ltac invert H := inversion H; subst; clear H.
   Ltac solve := repeat match goal with
                        | [ H: step _ _ |- _ ] => inversion H; subst; clear H
                        | [ H: <{ (open_exp_wrt_exp _ _) }> -->* _ |- _ ] => cbn in H
                        | [ H: ?P1 -->* ?P2 |- _ ] => inversion H; subst; clear H
                        end.
-  
-  Theorem div_gadget_equiv: div ~ div_check.
+
+  (** This is not complete over all possible witnesses, but still passes *)
+  Theorem div_gadget_equiv_1_noncomplete: div ~ div_check.
   Proof.
-    unfold circuit_equiv, div, div_check.
-    intros.
-    induction n.
+    unfold circuit_equiv1, div, div_check.
+    intros.    
     - exists fp_zero.
       split; intro H; solve.
   Qed.
 
-  Check fp_plus.
+  (** Magic = this doesn't need induction, also complete *)
+  Theorem div_gadget_equiv_2_complete: div ~~ div_check.
+  Proof.
+    unfold circuit_equiv2, div, div_check.
+    intros.    
+    split; intro H; solve.
+  Qed.
+  
+  (** This is complete over all possible witnesses, 
+      how to make this accepted but the above not ? *)
+  Theorem div_gadget_equiv_1_complete: div ~ div_check.
+  Proof.
+    unfold circuit_equiv1, div, div_check.
+    intros.
+    destruct n as (n', Hmod_n) eqn:F.
+    induction n'.
+    - exists fp_zero.
+      split; intro H; solve.
+    - exists (pkdiv fp_one n).
+      split; intro H; solve.
+    - exists (pkdiv (pkopp fp_one) n).
+      split; intro H; solve.
+  Qed.
+
   Fixpoint constant_to_boolnat(c: constant) : Fp :=
     match c with
     | const_true => fp_one
@@ -133,11 +164,18 @@ Module Gadgets.
            )
      }>.
 
-  Theorem ite_equiv: forall c, ite c ~ ite_check c.
+  Theorem ite_equiv_1: forall c, ite c ~ ite_check c.
   Proof.
     intros.
-    unfold circuit_equiv, ite, ite_check.
-    induction 0; exists fp_zero; split; intro H; solve.
+    unfold circuit_equiv1, ite, ite_check.
+    destruct 0; induction 0; exists fp_zero; split; intro H; solve.
+  Qed.
+
+  Theorem ite_equiv_2: forall c, ite c ~~ ite_check c.
+  Proof.
+    intros.
+    unfold circuit_equiv2, ite, ite_check.
+    intros; split; intro H; solve.
   Qed.
 
 End Gadgets.     
