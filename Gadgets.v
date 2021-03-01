@@ -1,7 +1,6 @@
 Require Import Metalib.Metatheory.
 From STLCZK Require Import Stlc.
 
-
 Section Foo.
   Variable A: nat.
   Definition bar(a: nat): Prop := a > A.
@@ -17,9 +16,13 @@ End Foo.
 
 Check bar.
 
-
+Require Import Coqprime.elliptic.ZEll.
+Require Import Coq.Numbers.BinNums.
 Module Gadgets.
 
+  Variable p: Z.
+  Definition Fp := pK p.
+  
   Definition X : atom := fresh nil.
   Definition Y : atom := fresh (X :: nil).
   

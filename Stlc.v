@@ -6,298 +6,324 @@ Require Import Ott.ott_list_core.
 (** syntax *)
 Definition expvar : Set := var.
 
-Inductive op : Set := 
- | op_add : op
- | op_sub : op
- | op_mul : op
- | op_div : op
- | op_and : op
- | op_or : op.
+(** For F_p *)
+Require Import Coqprime.elliptic.ZEll.
+Require Import Coq.ZArith.Znumtheory.
+Require Import Coq.ZArith.BinInt.
 
-Inductive constant : Set := 
- | const_true : constant
- | const_false : constant
- | const_field (n:nat).
+Module Stlc_Fp.
+  (** Prime  *)
+  Variable p: Z.
+  Hypothesis p_prime: prime p.
 
-Inductive typ : Set := 
- | ty_bool : typ
- | ty_field : typ
- | ty_arrow (T1:typ) (T2:typ).
+  Definition Fp := pK p.
+  
+  Inductive op : Set := 
+  | op_add : op
+  | op_sub : op
+  | op_mul : op
+  | op_div : op
+  | op_and : op
+  | op_or : op.
 
-Inductive exp : Set := 
- | tm_var_b (_:nat)
- | tm_var_f (x:expvar)
- | tm_abs (T:typ) (e:exp)
- | tm_app (e1:exp) (e2:exp)
- | tm_let (e1:exp) (e2:exp)
- | tm_constant (constant5:constant)
- | tm_binop (e1:exp) (op5:op) (e2:exp)
- | tm_eq (e1:exp) (e2:exp)
- | tm_not (e:exp)
- | tm_ifthenelse (e:exp) (e1:exp) (e2:exp).
+  Inductive constant : Set := 
+  | const_true : constant
+  | const_false : constant
+  | const_field (n: Fp).
 
-Definition typing_env : Set := list (atom*typ).
+  Inductive typ : Set := 
+  | ty_bool : typ
+  | ty_field : typ
+  | ty_arrow (T1:typ) (T2:typ).
 
-Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
-Proof.
-  decide equality; auto with ott_coq_equality arith.
-Defined.
-Hint Resolve eq_op : ott_coq_equality.
-Lemma eq_constant: forall (x y : constant), {x = y} + {x <> y}.
-Proof.
-  decide equality; auto with ott_coq_equality arith.
-Defined.
-Hint Resolve eq_constant : ott_coq_equality.
-Lemma eq_typ: forall (x y : typ), {x = y} + {x <> y}.
-Proof.
-  decide equality; auto with ott_coq_equality arith.
-Defined.
-Hint Resolve eq_typ : ott_coq_equality.
-Lemma eq_exp: forall (x y : exp), {x = y} + {x <> y}.
-Proof.
-  decide equality; auto with ott_coq_equality arith.
-Defined.
-Hint Resolve eq_exp : ott_coq_equality.
+  Inductive exp : Set := 
+  | tm_var_b (_:nat)
+  | tm_var_f (x:expvar)
+  | tm_abs (T:typ) (e:exp)
+  | tm_app (e1:exp) (e2:exp)
+  | tm_let (e1:exp) (e2:exp)
+  | tm_constant (constant5:constant)
+  | tm_binop (e1:exp) (op5:op) (e2:exp)
+  | tm_eq (e1:exp) (e2:exp)
+  | tm_not (e:exp)
+  | tm_ifthenelse (e:exp) (e1:exp) (e2:exp).
 
-(* EXPERIMENTAL *)
-(** auxiliary functions on the new list types *)
-(** library functions *)
-(** subrules *)
-Definition is_value_of_exp (e_5:exp) : bool :=
-  match e_5 with
-  | (tm_var_b nat) => false
-  | (tm_var_f x) => false
-  | (tm_abs T e) => (true)
-  | (tm_app e1 e2) => false
-  | (tm_let e1 e2) => false
-  | (tm_constant constant5) => (true)
-  | (tm_binop e1 op5 e2) => false
-  | (tm_eq e1 e2) => false
-  | (tm_not e) => false
-  | (tm_ifthenelse e e1 e2) => false
-end.
+  Definition typing_env : Set := list (atom*typ).
 
-(** arities *)
-(** opening up abstractions *)
-Fixpoint open_exp_wrt_exp_rec (k:nat) (e_5:exp) (e__6:exp) {struct e__6}: exp :=
-  match e__6 with
-  | (tm_var_b nat) => if (k === nat) then e_5 else (tm_var_b nat)
-  | (tm_var_f x) => tm_var_f x
-  | (tm_abs T e) => tm_abs T (open_exp_wrt_exp_rec (S k) e_5 e)
-  | (tm_app e1 e2) => tm_app (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
-  | (tm_let e1 e2) => tm_let (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec (S k) e_5 e2)
-  | (tm_constant constant5) => tm_constant constant5
-  | (tm_binop e1 op5 e2) => tm_binop (open_exp_wrt_exp_rec k e_5 e1) op5 (open_exp_wrt_exp_rec k e_5 e2)
-  | (tm_eq e1 e2) => tm_eq (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
-  | (tm_not e) => tm_not (open_exp_wrt_exp_rec k e_5 e)
-  | (tm_ifthenelse e e1 e2) => tm_ifthenelse (open_exp_wrt_exp_rec k e_5 e) (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
-end.
+  Lemma eq_fp: forall (x y : Fp), {x = y} + {x <> y}.
+  Proof.
+    intros.
+    unfold Fp in *.
+    unfold pK in *.
+    destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
+    pose proof (Z.eq_dec x0 y0).
+    inversion H.
+    - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
+    - right. intro. inversion H1. contradiction.
+  Qed.
+  Hint Resolve eq_fp: ott_coq_equality.
+  Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
+  Proof.
+    decide equality; auto with ott_coq_equality arith.
+  Defined.
+  Hint Resolve eq_op : ott_coq_equality.
+  Lemma eq_constant: forall (x y : constant), {x = y} + {x <> y}.
+  Proof.
+    decide equality; auto with ott_coq_equality arith.
+  Defined.
+  Hint Resolve eq_constant : ott_coq_equality.
+  Lemma eq_typ: forall (x y : typ), {x = y} + {x <> y}.
+  Proof.
+    decide equality; auto with ott_coq_equality arith.
+  Defined.
+  Hint Resolve eq_typ : ott_coq_equality.
+  Lemma eq_exp: forall (x y : exp), {x = y} + {x <> y}.
+  Proof.
+    decide equality; auto with ott_coq_equality arith.
+  Defined.
+  Hint Resolve eq_exp : ott_coq_equality.
 
-Definition open_exp_wrt_exp e_5 e__6 := open_exp_wrt_exp_rec 0 e__6 e_5.
+  (* EXPERIMENTAL *)
+  (** auxiliary functions on the new list types *)
+  (** library functions *)
+  (** subrules *)
+  
+  Definition is_value_of_exp (e_5:exp) : bool :=
+    match e_5 with
+    | (tm_var_b nat) => false
+    | (tm_var_f x) => false
+    | (tm_abs T e) => (true)
+    | (tm_app e1 e2) => false
+    | (tm_let e1 e2) => false
+    | (tm_constant constant5) => (true)
+    | (tm_binop e1 op5 e2) => false
+    | (tm_eq e1 e2) => false
+    | (tm_not e) => false
+    | (tm_ifthenelse e e1 e2) => false
+    end.
 
-(** terms are locally-closed pre-terms *)
-(** definitions *)
+  (** arities *)
+  (** opening up abstractions *)
+  Fixpoint open_exp_wrt_exp_rec (k:nat) (e_5:exp) (e__6:exp) {struct e__6}: exp :=
+    match e__6 with
+    | (tm_var_b n) => if (k == n) then e_5 else (tm_var_b n)
+    | (tm_var_f x) => tm_var_f x
+    | (tm_abs T e) => tm_abs T (open_exp_wrt_exp_rec (S k) e_5 e)
+    | (tm_app e1 e2) => tm_app (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
+    | (tm_let e1 e2) => tm_let (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec (S k) e_5 e2)
+    | (tm_constant constant5) => tm_constant constant5
+    | (tm_binop e1 op5 e2) => tm_binop (open_exp_wrt_exp_rec k e_5 e1) op5 (open_exp_wrt_exp_rec k e_5 e2)
+    | (tm_eq e1 e2) => tm_eq (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
+    | (tm_not e) => tm_not (open_exp_wrt_exp_rec k e_5 e)
+    | (tm_ifthenelse e e1 e2) => tm_ifthenelse (open_exp_wrt_exp_rec k e_5 e) (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
+    end.
 
-(* defns LC_exp *)
-Inductive lc_exp : exp -> Prop :=    (* defn lc_exp *)
- | lc_tm_var_f : forall (x:expvar),
-     (lc_exp (tm_var_f x))
- | lc_tm_abs : forall (L:vars) (T:typ) (e:exp),
+  Definition open_exp_wrt_exp e_5 e__6 := open_exp_wrt_exp_rec 0 e__6 e_5.
+
+  (** terms are locally-closed pre-terms *)
+  (** definitions *)
+
+  (* defns LC_exp *)
+  Inductive lc_exp : exp -> Prop :=    (* defn lc_exp *)
+  | lc_tm_var_f : forall (x:expvar),
+      (lc_exp (tm_var_f x))
+  | lc_tm_abs : forall (L:vars) (T:typ) (e:exp),
       ( forall x , x \notin  L  -> lc_exp  ( open_exp_wrt_exp e (tm_var_f x) )  )  ->
-     (lc_exp (tm_abs T e))
- | lc_tm_app : forall (e1 e2:exp),
-     (lc_exp e1) ->
-     (lc_exp e2) ->
-     (lc_exp (tm_app e1 e2))
- | lc_tm_let : forall (L:vars) (e1 e2:exp),
-     (lc_exp e1) ->
+      (lc_exp (tm_abs T e))
+  | lc_tm_app : forall (e1 e2:exp),
+      (lc_exp e1) ->
+      (lc_exp e2) ->
+      (lc_exp (tm_app e1 e2))
+  | lc_tm_let : forall (L:vars) (e1 e2:exp),
+      (lc_exp e1) ->
       ( forall x , x \notin  L  -> lc_exp  ( open_exp_wrt_exp e2 (tm_var_f x) )  )  ->
-     (lc_exp (tm_let e1 e2))
- | lc_tm_constant : forall (constant5:constant),
-     (lc_exp (tm_constant constant5))
- | lc_tm_binop : forall (e1:exp) (op5:op) (e2:exp),
-     (lc_exp e1) ->
-     (lc_exp e2) ->
-     (lc_exp (tm_binop e1 op5 e2))
- | lc_tm_eq : forall (e1 e2:exp),
-     (lc_exp e1) ->
-     (lc_exp e2) ->
-     (lc_exp (tm_eq e1 e2))
- | lc_tm_not : forall (e:exp),
-     (lc_exp e) ->
-     (lc_exp (tm_not e))
- | lc_tm_ifthenelse : forall (e e1 e2:exp),
-     (lc_exp e) ->
-     (lc_exp e1) ->
-     (lc_exp e2) ->
-     (lc_exp (tm_ifthenelse e e1 e2)).
-(** free variables *)
-Fixpoint fv_exp (e_5:exp) : vars :=
-  match e_5 with
-  | (tm_var_b nat) => {}
-  | (tm_var_f x) => {{x}}
-  | (tm_abs T e) => (fv_exp e)
-  | (tm_app e1 e2) => (fv_exp e1) \u (fv_exp e2)
-  | (tm_let e1 e2) => (fv_exp e1) \u (fv_exp e2)
-  | (tm_constant constant5) => {}
-  | (tm_binop e1 op5 e2) => (fv_exp e1) \u (fv_exp e2)
-  | (tm_eq e1 e2) => (fv_exp e1) \u (fv_exp e2)
-  | (tm_not e) => (fv_exp e)
-  | (tm_ifthenelse e e1 e2) => (fv_exp e) \u (fv_exp e1) \u (fv_exp e2)
-end.
+      (lc_exp (tm_let e1 e2))
+  | lc_tm_constant : forall (constant5:constant),
+      (lc_exp (tm_constant constant5))
+  | lc_tm_binop : forall (e1:exp) (op5:op) (e2:exp),
+      (lc_exp e1) ->
+      (lc_exp e2) ->
+      (lc_exp (tm_binop e1 op5 e2))
+  | lc_tm_eq : forall (e1 e2:exp),
+      (lc_exp e1) ->
+      (lc_exp e2) ->
+      (lc_exp (tm_eq e1 e2))
+  | lc_tm_not : forall (e:exp),
+      (lc_exp e) ->
+      (lc_exp (tm_not e))
+  | lc_tm_ifthenelse : forall (e e1 e2:exp),
+      (lc_exp e) ->
+      (lc_exp e1) ->
+      (lc_exp e2) ->
+      (lc_exp (tm_ifthenelse e e1 e2)).
+  (** free variables *)
+  Fixpoint fv_exp (e_5:exp) : vars :=
+    match e_5 with
+    | (tm_var_b nat) => {}
+    | (tm_var_f x) => {{x}}
+    | (tm_abs T e) => (fv_exp e)
+    | (tm_app e1 e2) => (fv_exp e1) \u (fv_exp e2)
+    | (tm_let e1 e2) => (fv_exp e1) \u (fv_exp e2)
+    | (tm_constant constant5) => {}
+    | (tm_binop e1 op5 e2) => (fv_exp e1) \u (fv_exp e2)
+    | (tm_eq e1 e2) => (fv_exp e1) \u (fv_exp e2)
+    | (tm_not e) => (fv_exp e)
+    | (tm_ifthenelse e e1 e2) => (fv_exp e) \u (fv_exp e1) \u (fv_exp e2)
+    end.
 
-(** substitutions *)
-Fixpoint subst_exp (e_5:exp) (x5:expvar) (e__6:exp) {struct e__6} : exp :=
-  match e__6 with
-  | (tm_var_b nat) => tm_var_b nat
-  | (tm_var_f x) => (if eq_var x x5 then e_5 else (tm_var_f x))
-  | (tm_abs T e) => tm_abs T (subst_exp e_5 x5 e)
-  | (tm_app e1 e2) => tm_app (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
-  | (tm_let e1 e2) => tm_let (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
-  | (tm_constant constant5) => tm_constant constant5
-  | (tm_binop e1 op5 e2) => tm_binop (subst_exp e_5 x5 e1) op5 (subst_exp e_5 x5 e2)
-  | (tm_eq e1 e2) => tm_eq (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
-  | (tm_not e) => tm_not (subst_exp e_5 x5 e)
-  | (tm_ifthenelse e e1 e2) => tm_ifthenelse (subst_exp e_5 x5 e) (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
-end.
+  (** substitutions *)
+  Fixpoint subst_exp (e_5:exp) (x5:expvar) (e__6:exp) {struct e__6} : exp :=
+    match e__6 with
+    | (tm_var_b nat) => tm_var_b nat
+    | (tm_var_f x) => (if eq_var x x5 then e_5 else (tm_var_f x))
+    | (tm_abs T e) => tm_abs T (subst_exp e_5 x5 e)
+    | (tm_app e1 e2) => tm_app (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
+    | (tm_let e1 e2) => tm_let (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
+    | (tm_constant constant5) => tm_constant constant5
+    | (tm_binop e1 op5 e2) => tm_binop (subst_exp e_5 x5 e1) op5 (subst_exp e_5 x5 e2)
+    | (tm_eq e1 e2) => tm_eq (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
+    | (tm_not e) => tm_not (subst_exp e_5 x5 e)
+    | (tm_ifthenelse e e1 e2) => tm_ifthenelse (subst_exp e_5 x5 e) (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
+    end.
 
-
-(** definitions *)
-
-(* defns Jtyping *)
-Inductive typing : typing_env -> exp -> typ -> Prop :=    (* defn typing *)
- | typing_var : forall (G:typing_env) (x:expvar) (T:typ),
+  (** definitions *)
+  (* defns Jtyping *)
+  Locate "~".
+  Global Close Scope positive_scope.
+  
+  Inductive typing : typing_env -> exp -> typ -> Prop :=    (* defn typing *)
+  | typing_var : forall (G:typing_env) (x:expvar) (T:typ),
       binds ( x ) ( T ) ( G )  ->
       uniq ( G )  ->
-     typing G (tm_var_f x) T
- | typing_abs : forall (L:vars) (G:typing_env) (T1:typ) (e:exp) (T2:typ),
+      typing G (tm_var_f x) T
+  | typing_abs : forall (L:vars) (G:typing_env) (T1:typ) (e:exp) (T2:typ),
       ( forall x , x \notin  L  -> typing  ( x ~ T1  ++  G )   ( open_exp_wrt_exp e (tm_var_f x) )  T2 )  ->
-     typing G (tm_abs T1 e) (ty_arrow T1 T2)
- | typing_app : forall (G:typing_env) (e1 e2:exp) (T2 T1:typ),
-     typing G e1 (ty_arrow T1 T2) ->
-     typing G e2 T1 ->
-     typing G (tm_app e1 e2) T2
- | typing_true : forall (G:typing_env),
-     typing G (tm_constant const_true) ty_bool
- | typing_false : forall (G:typing_env),
-     typing G (tm_constant const_false) ty_bool
- | typing_field : forall (G:typing_env) (n:nat),
-     typing G (tm_constant (const_field n)) ty_field
- | typing_boolop : forall (G:typing_env) (e1:exp) (op5:op) (e2:exp),
-     typing G e1 ty_bool ->
-     typing G e2 ty_bool ->
-     typing G (tm_binop e1 op5 e2) ty_bool
- | typing_boolnot : forall (G:typing_env) (e:exp),
-     typing G e ty_bool ->
-     typing G (tm_not e) ty_bool
- | typing_fieldop : forall (G:typing_env) (e1:exp) (op5:op) (e2:exp),
-     typing G e1 ty_field ->
-     typing G e2 ty_field ->
-     typing G (tm_binop e1 op5 e2) ty_field
- | typing_eqop : forall (G:typing_env) (e1 e2:exp) (T:typ),
-     typing G e1 T ->
-     typing G e2 T ->
-     typing G (tm_eq e1 e2) ty_bool
- | typing_if : forall (G:typing_env) (e e1 e2:exp) (T:typ),
-     typing G e ty_bool ->
-     typing G e1 T ->
-     typing G e2 T ->
-     typing G (tm_ifthenelse e e1 e2) T
- | typing_let : forall (L:vars) (G:typing_env) (e1 e2:exp) (T2 T1:typ),
-     typing G e1 T1 ->
+      typing G (tm_abs T1 e) (ty_arrow T1 T2)
+  | typing_app : forall (G:typing_env) (e1 e2:exp) (T2 T1:typ),
+      typing G e1 (ty_arrow T1 T2) ->
+      typing G e2 T1 ->
+      typing G (tm_app e1 e2) T2
+  | typing_true : forall (G:typing_env),
+      typing G (tm_constant const_true) ty_bool
+  | typing_false : forall (G:typing_env),
+      typing G (tm_constant const_false) ty_bool
+  | typing_field : forall (G:typing_env) (n:nat),
+      typing G (tm_constant (const_field n)) ty_field
+  | typing_boolop : forall (G:typing_env) (e1:exp) (op5:op) (e2:exp),
+      typing G e1 ty_bool ->
+      typing G e2 ty_bool ->
+      typing G (tm_binop e1 op5 e2) ty_bool
+  | typing_boolnot : forall (G:typing_env) (e:exp),
+      typing G e ty_bool ->
+      typing G (tm_not e) ty_bool
+  | typing_fieldop : forall (G:typing_env) (e1:exp) (op5:op) (e2:exp),
+      typing G e1 ty_field ->
+      typing G e2 ty_field ->
+      typing G (tm_binop e1 op5 e2) ty_field
+  | typing_eqop : forall (G:typing_env) (e1 e2:exp) (T:typ),
+      typing G e1 T ->
+      typing G e2 T ->
+      typing G (tm_eq e1 e2) ty_bool
+  | typing_if : forall (G:typing_env) (e e1 e2:exp) (T:typ),
+      typing G e ty_bool ->
+      typing G e1 T ->
+      typing G e2 T ->
+      typing G (tm_ifthenelse e e1 e2) T
+  | typing_let : forall (L:vars) (G:typing_env) (e1 e2:exp) (T2 T1:typ),
+      typing G e1 T1 ->
       ( forall x , x \notin  L  -> typing  ( x ~ T1  ++  G )   ( open_exp_wrt_exp e2 (tm_var_f x) )  T2 )  ->
-     typing G (tm_let e1 e2) T2.
+      typing G (tm_let e1 e2) T2.
 
-(* defns Jop *)
-Inductive step : exp -> exp -> Prop :=    (* defn step *)
- | step_app_1 : forall (e1 e2 e1':exp),
-     lc_exp e2 ->
-     step e1 e1' ->
-     step (tm_app e1 e2) (tm_app e1' e2)
- | step_app_2 : forall (e2 e2' v1:exp),
-     Is_true (is_value_of_exp v1) ->
-     lc_exp v1 ->
-     step e2 e2' ->
-     step (tm_app v1 e2) (tm_app v1 e2')
- | step_beta : forall (T:typ) (e1 v2:exp),
-     Is_true (is_value_of_exp v2) ->
-     lc_exp (tm_abs T e1) ->
-     lc_exp v2 ->
-     step (tm_app  ( (tm_abs T e1) )  v2)  (open_exp_wrt_exp  e1   v2 ) 
- | step_if_true : forall (e1 e2:exp),
-     lc_exp e2 ->
-     lc_exp e1 ->
-     step (tm_ifthenelse (tm_constant const_true) e1 e2) e1
- | step_if_false : forall (e1 e2:exp),
-     lc_exp e1 ->
-     lc_exp e2 ->
-     step (tm_ifthenelse (tm_constant const_false) e1 e2) e2
- | step_not_true : 
-     step (tm_not (tm_constant const_true)) (tm_constant const_false)
- | step_not_false : 
-     step (tm_not (tm_constant const_false)) (tm_constant const_true)
- | step_and_1 : forall (e:exp),
-     lc_exp e ->
-     step  ( (tm_binop e op_and (tm_constant const_true)) )  e
- | step_and_2 : forall (e:exp),
-     lc_exp e ->
-     step  ( (tm_binop (tm_constant const_true) op_and e) )  e
- | step_and_3 : forall (e:exp),
-     lc_exp e ->
-     step  ( (tm_binop e op_and (tm_constant const_false)) )  (tm_constant const_false)
- | step_and_4 : forall (e:exp),
-     lc_exp e ->
-     step  ( (tm_binop (tm_constant const_false) op_and e) )  (tm_constant const_false)
- | step_or_1 : forall (e1:exp),
-     lc_exp e1 ->
-     step  ( (tm_binop e1 op_or (tm_constant const_true)) )  (tm_constant const_true)
- | step_or_2 : forall (e1:exp),
-     lc_exp e1 ->
-     step  ( (tm_binop (tm_constant const_true) op_or e1) )  (tm_constant const_true)
- | step_or_3 : forall (e1:exp),
-     lc_exp e1 ->
-     step  ( (tm_binop e1 op_or (tm_constant const_false)) )  e1
- | step_or_4 : forall (e1:exp),
-     lc_exp e1 ->
-     step  ( (tm_binop (tm_constant const_false) op_or e1) )  e1
- | step_let_v : forall (e2 v1:exp),
-     Is_true (is_value_of_exp v1) ->
-     lc_exp (tm_let v1 e2) ->
-     lc_exp v1 ->
-     step (tm_let v1 e2)  (open_exp_wrt_exp  e2   v1 ) 
- | step_let_cog : forall (e1 e2 e1':exp),
-     lc_exp (tm_let e1 e2) ->
-     step e1 e1' ->
-     step (tm_let e1 e2) (tm_let e1' e2)
- | step_binop_cog_1 : forall (e1:exp) (op5:op) (e2 e1':exp),
-     lc_exp e2 ->
-     step e1 e1' ->
-     step (tm_binop e1 op5 e2) (tm_binop e1' op5 e2)
- | step_binop_cog_2 : forall (c1:constant) (op5:op) (e2 e2':exp),
-     step e2 e2' ->
-     step (tm_binop (tm_constant c1) op5 e2) (tm_binop (tm_constant c1) op5 e2')
- | step_add_const : forall (n1 n2:nat),
-     step (tm_binop (tm_constant (const_field n1)) op_add (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  +  n2 ) ))
- | step_sub_const : forall (n1 n2:nat),
-     step (tm_binop (tm_constant (const_field n1)) op_sub (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  -  n2 ) ))
- | step_mul_const : forall (n1 n2:nat),
-     step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  *  n2 ) ))
- | step_div_const : forall (n1 n2:nat),
+  (* defns Jop *)
+  Inductive step : exp -> exp -> Prop :=    (* defn step *)
+  | step_app_1 : forall (e1 e2 e1':exp),
+      lc_exp e2 ->
+      step e1 e1' ->
+      step (tm_app e1 e2) (tm_app e1' e2)
+  | step_app_2 : forall (e2 e2' v1:exp),
+      Is_true (is_value_of_exp v1) ->
+      lc_exp v1 ->
+      step e2 e2' ->
+      step (tm_app v1 e2) (tm_app v1 e2')
+  | step_beta : forall (T:typ) (e1 v2:exp),
+      Is_true (is_value_of_exp v2) ->
+      lc_exp (tm_abs T e1) ->
+      lc_exp v2 ->
+      step (tm_app  ( (tm_abs T e1) )  v2)  (open_exp_wrt_exp  e1   v2 ) 
+  | step_if_true : forall (e1 e2:exp),
+      lc_exp e2 ->
+      lc_exp e1 ->
+      step (tm_ifthenelse (tm_constant const_true) e1 e2) e1
+  | step_if_false : forall (e1 e2:exp),
+      lc_exp e1 ->
+      lc_exp e2 ->
+      step (tm_ifthenelse (tm_constant const_false) e1 e2) e2
+  | step_not_true : 
+      step (tm_not (tm_constant const_true)) (tm_constant const_false)
+  | step_not_false : 
+      step (tm_not (tm_constant const_false)) (tm_constant const_true)
+  | step_and_1 : forall (e:exp),
+      lc_exp e ->
+      step  ( (tm_binop e op_and (tm_constant const_true)) )  e
+  | step_and_2 : forall (e:exp),
+      lc_exp e ->
+      step  ( (tm_binop (tm_constant const_true) op_and e) )  e
+  | step_and_3 : forall (e:exp),
+      lc_exp e ->
+      step  ( (tm_binop e op_and (tm_constant const_false)) )  (tm_constant const_false)
+  | step_and_4 : forall (e:exp),
+      lc_exp e ->
+      step  ( (tm_binop (tm_constant const_false) op_and e) )  (tm_constant const_false)
+  | step_or_1 : forall (e1:exp),
+      lc_exp e1 ->
+      step  ( (tm_binop e1 op_or (tm_constant const_true)) )  (tm_constant const_true)
+  | step_or_2 : forall (e1:exp),
+      lc_exp e1 ->
+      step  ( (tm_binop (tm_constant const_true) op_or e1) )  (tm_constant const_true)
+  | step_or_3 : forall (e1:exp),
+      lc_exp e1 ->
+      step  ( (tm_binop e1 op_or (tm_constant const_false)) )  e1
+  | step_or_4 : forall (e1:exp),
+      lc_exp e1 ->
+      step  ( (tm_binop (tm_constant const_false) op_or e1) )  e1
+  | step_let_v : forall (e2 v1:exp),
+      Is_true (is_value_of_exp v1) ->
+      lc_exp (tm_let v1 e2) ->
+      lc_exp v1 ->
+      step (tm_let v1 e2)  (open_exp_wrt_exp  e2   v1 ) 
+  | step_let_cog : forall (e1 e2 e1':exp),
+      lc_exp (tm_let e1 e2) ->
+      step e1 e1' ->
+      step (tm_let e1 e2) (tm_let e1' e2)
+  | step_binop_cog_1 : forall (e1:exp) (op5:op) (e2 e1':exp),
+      lc_exp e2 ->
+      step e1 e1' ->
+      step (tm_binop e1 op5 e2) (tm_binop e1' op5 e2)
+  | step_binop_cog_2 : forall (c1:constant) (op5:op) (e2 e2':exp),
+      step e2 e2' ->
+      step (tm_binop (tm_constant c1) op5 e2) (tm_binop (tm_constant c1) op5 e2')
+  | step_add_const : forall (n1 n2:nat),
+      step (tm_binop (tm_constant (const_field n1)) op_add (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  +  n2 ) ))
+  | step_sub_const : forall (n1 n2:nat),
+      step (tm_binop (tm_constant (const_field n1)) op_sub (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  -  n2 ) ))
+  | step_mul_const : forall (n1 n2:nat),
+      step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  *  n2 ) ))
+  | step_div_const : forall (n1 n2:nat),
       (const_field n2)  <>  (const_field  0 )  ->
-     step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  /  n2 ) ))
- | step_eq_cog_1 : forall (e1 e2 e1':exp),
-     lc_exp e2 ->
-     step e1 e1' ->
-     step (tm_eq e1 e2) (tm_eq e1' e2)
- | step_eq_cog_2 : forall (c1:constant) (e2 e2':exp),
-     step e2 e2' ->
-     step (tm_eq (tm_constant c1) e2) (tm_eq (tm_constant c1) e2')
- | step_eq_refl : forall (c:constant),
-     step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant const_true)
- | step_eq_neq : forall (c1 c2:constant),
+      step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  /  n2 ) ))
+  | step_eq_cog_1 : forall (e1 e2 e1':exp),
+      lc_exp e2 ->
+      step e1 e1' ->
+      step (tm_eq e1 e2) (tm_eq e1' e2)
+  | step_eq_cog_2 : forall (c1:constant) (e2 e2':exp),
+      step e2 e2' ->
+      step (tm_eq (tm_constant c1) e2) (tm_eq (tm_constant c1) e2')
+  | step_eq_refl : forall (c:constant),
+      step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant const_true)
+  | step_eq_neq : forall (c1 c2:constant),
       c1  <>  c2  ->
-     step (tm_eq (tm_constant c1) (tm_constant c2)) (tm_constant const_false).
+      step (tm_eq (tm_constant c1) (tm_constant c2)) (tm_constant const_false).
 
-
-(** infrastructure *)
-Hint Constructors typing step lc_exp : core.
+  (** infrastructure *)
+  Hint Constructors typing step lc_exp : core.
+End Stlc_Fp.

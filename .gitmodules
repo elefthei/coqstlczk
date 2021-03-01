@@ -1,0 +1,3 @@
+[submodule "coqprime"]
+	path = coqprime
+	url = https://github.com/thery/coqprime.git
