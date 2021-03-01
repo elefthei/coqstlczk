@@ -1,34 +1,19 @@
 Require Import Metalib.Metatheory.
 From STLCZK Require Import Stlc.
 
-Section Foo.
-  Variable A: nat.
-  Definition bar(a: nat): Prop := a > A.
-  
-  Lemma L: exists n, bar n.
-  Proof.
-    exists (S A).
-    unfold bar.
-    auto.
-  Qed.
-
-End Foo.
-
-Check bar.
-
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.Numbers.BinNums.
-Module Gadgets.
 
-  Variable p: Z.
-  Definition Fp := pK p.
+Module Gadgets.
+  Import Stlc_Fp.
   
   Definition X : atom := fresh nil.
   Definition Y : atom := fresh (X :: nil).
   
   (** Notation on Stlc_Ott *)
+  
   Coercion tm_var_f: expvar >-> exp.
-  Coercion const_field: nat >-> constant.
+  Coercion const_field: Fp >-> constant.
   Coercion tm_constant: constant >-> exp.
   
   Declare Custom Entry stlc_ty.
@@ -90,7 +75,7 @@ Module Gadgets.
   Notation " t '-->*' t' " := (multi step t t') (at level 40).
   
   Definition circuit_equiv(c: exp) (c': exp): Prop :=
-    forall (n: nat), exists (ans: nat),
+    forall (n: Fp), exists (ans: Fp),
         <{ c' n ans }> -->* const_true <->
         <{ c n }> -->* ans.
    
@@ -98,12 +83,12 @@ Module Gadgets.
 
   (** Example 1: Division *)
   Definition div :=
-    <{ \_: Field, (1 / #1) }>.
+    <{ \_: Field, ({const_field fp_one} / #1) }>.
 
   Definition div_check :=
     <{ \_: Field,
            (\_: Field,
-                #1 * #2 == 1)
+                #1 * #2 == ({const_field fp_one}))
      }>.
 
   Ltac invert H := inversion H; subst; clear H.
@@ -118,18 +103,17 @@ Module Gadgets.
     unfold circuit_equiv, div, div_check.
     intros.
     induction n.
-    - exists 0.
+    - exists fp_zero.
       split; intro H; solve.
-    - exists 0. (** This is wrong in F_p but works in nat *)
-      split; intro H'; solve.
   Qed.
 
-  Fixpoint constant_to_boolnat(c: constant) : nat :=
+  Check fp_plus.
+  Fixpoint constant_to_boolnat(c: constant) : Fp :=
     match c with
-    | const_true => 1
-    | const_false => 0
-    | const_field 0 => 0
-    | const_field (S n) => 1
+    | const_true => fp_one
+    | const_false => fp_zero
+    | const_field (GZnZ.mkznz _ Z0 _) => fp_zero
+    | const_field (GZnZ.mkznz _ _ _) => fp_one
     end.
   
   (** Example 2: Conditional *)
@@ -151,8 +135,9 @@ Module Gadgets.
 
   Theorem ite_equiv: forall c, ite c ~ ite_check c.
   Proof.
-    destruct 0 eqn:Hc;
-      unfold circuit_equiv, ite, ite_check; induction 0; exists 0; split; intro H; solve.
+    intros.
+    unfold circuit_equiv, ite, ite_check.
+    induction 0; exists fp_zero; split; intro H; solve.
   Qed.
 
 End Gadgets.     

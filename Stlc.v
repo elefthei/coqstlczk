@@ -11,13 +11,18 @@ Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinInt.
 
+
 Module Stlc_Fp.
   (** Prime  *)
   Variable p: Z.
   Hypothesis p_prime: prime p.
 
   Definition Fp := pK p.
-  
+  Definition fp_one := pkI p.
+  Definition fp_zero := pkO p.
+
+  Definition fp_plus := pkplus.
+
   Inductive op : Set := 
   | op_add : op
   | op_sub : op
@@ -56,12 +61,13 @@ Module Stlc_Fp.
     unfold Fp in *.
     unfold pK in *.
     destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
-    pose proof (Z.eq_dec x0 y0).
+    pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
     inversion H.
     - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
     - right. intro. inversion H1. contradiction.
   Qed.
   Hint Resolve eq_fp: ott_coq_equality.
+
   Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
   Proof.
     decide equality; auto with ott_coq_equality arith.
@@ -188,16 +194,14 @@ Module Stlc_Fp.
 
   (** definitions *)
   (* defns Jtyping *)
-  Locate "~".
-  Global Close Scope positive_scope.
-  
+   
   Inductive typing : typing_env -> exp -> typ -> Prop :=    (* defn typing *)
   | typing_var : forall (G:typing_env) (x:expvar) (T:typ),
       binds ( x ) ( T ) ( G )  ->
       uniq ( G )  ->
       typing G (tm_var_f x) T
   | typing_abs : forall (L:vars) (G:typing_env) (T1:typ) (e:exp) (T2:typ),
-      ( forall x , x \notin  L  -> typing  ( x ~ T1  ++  G )   ( open_exp_wrt_exp e (tm_var_f x) )  T2 )  ->
+      ( forall x , x \notin  L  -> typing  ( (one (pair x T1))  ++  G )   ( open_exp_wrt_exp e (tm_var_f x) )  T2 )  ->
       typing G (tm_abs T1 e) (ty_arrow T1 T2)
   | typing_app : forall (G:typing_env) (e1 e2:exp) (T2 T1:typ),
       typing G e1 (ty_arrow T1 T2) ->
@@ -207,7 +211,7 @@ Module Stlc_Fp.
       typing G (tm_constant const_true) ty_bool
   | typing_false : forall (G:typing_env),
       typing G (tm_constant const_false) ty_bool
-  | typing_field : forall (G:typing_env) (n:nat),
+  | typing_field : forall (G:typing_env) (n:Fp),
       typing G (tm_constant (const_field n)) ty_field
   | typing_boolop : forall (G:typing_env) (e1:exp) (op5:op) (e2:exp),
       typing G e1 ty_bool ->
@@ -231,7 +235,7 @@ Module Stlc_Fp.
       typing G (tm_ifthenelse e e1 e2) T
   | typing_let : forall (L:vars) (G:typing_env) (e1 e2:exp) (T2 T1:typ),
       typing G e1 T1 ->
-      ( forall x , x \notin  L  -> typing  ( x ~ T1  ++  G )   ( open_exp_wrt_exp e2 (tm_var_f x) )  T2 )  ->
+      ( forall x , x \notin  L  -> typing  ( (one (pair x T1))  ++  G )   ( open_exp_wrt_exp e2 (tm_var_f x) )  T2 )  ->
       typing G (tm_let e1 e2) T2.
 
   (* defns Jop *)
@@ -302,15 +306,15 @@ Module Stlc_Fp.
   | step_binop_cog_2 : forall (c1:constant) (op5:op) (e2 e2':exp),
       step e2 e2' ->
       step (tm_binop (tm_constant c1) op5 e2) (tm_binop (tm_constant c1) op5 e2')
-  | step_add_const : forall (n1 n2:nat),
-      step (tm_binop (tm_constant (const_field n1)) op_add (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  +  n2 ) ))
-  | step_sub_const : forall (n1 n2:nat),
-      step (tm_binop (tm_constant (const_field n1)) op_sub (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  -  n2 ) ))
-  | step_mul_const : forall (n1 n2:nat),
-      step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  *  n2 ) ))
-  | step_div_const : forall (n1 n2:nat),
-      (const_field n2)  <>  (const_field  0 )  ->
-      step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  ( n1  /  n2 ) ))
+  | step_add_const : forall (n1 n2: Fp),
+      step (tm_binop (tm_constant (const_field n1)) op_add (tm_constant (const_field n2))) (tm_constant (const_field  ( pkplus n1  n2 ) ))
+  | step_sub_const : forall (n1 n2: Fp),
+      step (tm_binop (tm_constant (const_field n1)) op_sub (tm_constant (const_field n2))) (tm_constant (const_field  ( pksub n1 n2 ) ))
+  | step_mul_const : forall (n1 n2: Fp),
+      step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  ( pkmul n1 n2 ) ))
+  | step_div_const : forall (n1 n2: Fp),
+      (const_field n2)  <>  (const_field  fp_zero)  ->
+      step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  ( pkdiv n1  n2 ) ))
   | step_eq_cog_1 : forall (e1 e2 e1':exp),
       lc_exp e2 ->
       step e1 e1' ->
