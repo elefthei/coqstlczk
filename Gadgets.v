@@ -76,21 +76,34 @@ Module Gadgets.
 
   (** Example 1: Division *)
   Definition div :=
-    <{ \_: Field, ({const_field fp_one} / #1) }>.
+    <{ \_: Field, ({const_field fp_one} / #0) }>.
 
+  Definition div_applied(c: Fp) :=
+    <{ div ({const_field c}) }>.
+  Definition foo(c: Fp) :=
+    match div_applied c with
+    | tm_app ((tm_abs _ e1)) v => true
+    | _ => false
+    end.
+
+  Compute foo fp_one.
+  (** step (tm_app  ( (tm_abs T e1) )  v2)  (open_exp_wrt_exp  e1   v2 ) *)
+  
+  Print div_applied. 
   Definition div_check :=
     <{ \_: Field,
            (\_: Field,
-                #1 * #2 == ({const_field fp_one}))
+                #0 * #1 == ({const_field fp_one}))
      }>.
 
   Definition circuit_equiv1(c: exp) (c': exp): Prop :=
     forall (n: Fp), exists (ans: Fp),
-        <{ c' n ans }> -->* const_true <->
-        <{ c n }> -->* ans.
+        typing nil c (ty_arrow ty_field ty_field) /\
+        typing nil c' (ty_arrow ty_field (ty_arrow ty_field ty_bool)) ->
+        (<{ c' n ans }> -->* const_true <->
+        <{ c n }> -->* ans).
    
   Notation "a '~' b" := (circuit_equiv1 a b) (at level 50).
-
 
   Definition circuit_equiv2(c: exp) (c': exp): Prop :=
     forall (n: Fp), forall (ans: Fp),
@@ -99,28 +112,60 @@ Module Gadgets.
    
   Notation "a '~~' b" := (circuit_equiv2 a b) (at level 50).
 
+  
   Ltac invert H := inversion H; subst; clear H.
-  Ltac solve := repeat match goal with
-                       | [ H: step _ _ |- _ ] => inversion H; subst; clear H
-                       | [ H: <{ (open_exp_wrt_exp _ _) }> -->* _ |- _ ] => cbn in H
-                       | [ H: ?P1 -->* ?P2 |- _ ] => inversion H; subst; clear H
-                       end.
+  Ltac invert_log_solved H g := 
+    solve [inversion H; fail; idtac "solved"] || invert H.
 
+  Ltac solve_stlc :=
+    repeat match goal with
+           | [ H: <{ (open_exp_wrt_exp _ _) }> -->* _ |- _ ] => idtac "cbn"; cbn in H
+           | [ H: <{ (open_exp_wrt_exp _ _) _ }> -->* _ |- _ ] => idtac "cbn"; cbn in H        
+           | [ H: step ?a ?b |- ?g ] => idtac "Inverting" a "-->" b "for" g; invert_log_solved H g
+           | [ H: ?a -->* ?b |- _ ] => idtac "Big-step" a "-->*" b; inversion H; subst; clear H
+           end.
+  
   (** This is not complete over all possible witnesses, but still passes *)
   Theorem div_gadget_equiv_1_noncomplete: div ~ div_check.
   Proof.
     unfold circuit_equiv1, div, div_check.
-    intros.    
+    intros.
+    destruct n as (n', n_mod) eqn:N.
+    induction n'.
     - exists fp_zero.
-      split; intro H; solve.
+      intros [H_tyc H_tyc'].
+      split; intro H; solve_stlc.
+      unfold fp_zero, pkO, GZnZ.zero in *.
+      apply eq_fp in H5.
+      cbn in H5.
+      intro H.
+      solve_stlc.
+
+      intro H. solve_stlc.
+      solve_stlc.
+      invert H.
+      invert H0.
+      invert H5.
+      invert H6.
+      invert H7.
+
+      solve_stlc.
+      invert H1.
+      invert H.
+      solve_stlc.
+
+      invert H10.
+      
+      cbn in H1.
+      intro H; solve_stlc.
   Qed.
 
-  (** Magic = this doesn't need induction, also complete *)
+  
   Theorem div_gadget_equiv_2_complete: div ~~ div_check.
   Proof.
     unfold circuit_equiv2, div, div_check.
     intros.    
-    split; intro H; solve.
+    split; intro H; solve_stlc.
   Qed.
   
   (** This is complete over all possible witnesses, 
@@ -132,11 +177,11 @@ Module Gadgets.
     destruct n as (n', Hmod_n) eqn:F.
     induction n'.
     - exists fp_zero.
-      split; intro H; solve.
+      split; intro H; solve_stlc.
     - exists (pkdiv fp_one n).
-      split; intro H; solve.
+      split; intro H; solve_stlc.
     - exists (pkdiv (pkopp fp_one) n).
-      split; intro H; solve.
+      split; intro H; solve_stlc.
   Qed.
 
   Fixpoint constant_to_boolnat(c: constant) : Fp :=

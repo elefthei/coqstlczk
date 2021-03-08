@@ -63,6 +63,7 @@ Module Stlc_Fp.
     destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
     pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
     inversion H.
+    Check GZnZ.zirr.
     - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
     - right. intro. inversion H1. contradiction.
   Qed.
@@ -162,6 +163,7 @@ Module Stlc_Fp.
       (lc_exp e1) ->
       (lc_exp e2) ->
       (lc_exp (tm_ifthenelse e e1 e2)).
+  
   (** free variables *)
   Fixpoint fv_exp (e_5:exp) : vars :=
     match e_5 with
