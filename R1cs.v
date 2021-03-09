@@ -13,25 +13,24 @@ Module R1CS.
 
 
   (** Maps *)
-  Definition Map: Type -> Type := M.t.
-  Definition find k (m: Map Fp) := M.find k m.
-  Definition update (p: nat * Fp) (m: Map Fp) :=
+  Definition NMap: Type -> Type := M.t.
+  Definition find k (m: NMap Fp) := M.find k m.
+  Definition update (p: nat * Fp) (m: NMap Fp) :=
     M.add (fst p) (snd p) m.
 
   Notation "k |-> v" := (pair k v) (at level 60).
   Notation "[ ]" := (M.empty Fp).
   Notation "[ p1 , .. , pn ]" := (update p1 .. (update pn (M.empty Fp)) .. ).
 
-  Example ex1: find 3 [1 |-> fp_one, 3 |-> fp_zero] = Some fp_zero.
-  Proof. reflexivity. Qed.
-
-  
+  (** Linear combination sum (map (\a,b -> a* find b ctx)) + const *)
+  (** eval { (3, a), (2,b) }, 4 ==> 3 * find ctx a + 2 * find ctx b + 4 *)
   Record Lc : Type :=
     mkLc {
-        vars: Map Fp;
+        vars: NMap Fp;
         const: Fp
       }.
 
+  (** eval a + eval b = eval c *)
   Record BilinearConstraint: Type :=
     mkBilinearConstraint {
         a: Lc;
@@ -42,7 +41,7 @@ Module R1CS.
   Definition R1cs := list BilinearConstraint.
 
   (** Evaluate LC like this: const + (sum . map (+) $ vars) == 0 *)
-  Definition evalLc(ctx: Map Fp)(lc: Lc): option Fp :=
+  Definition evalLc(ctx: NMap Fp)(lc: Lc): option Fp :=
     M.fold
       (fun i v acc =>
          match acc with
@@ -54,16 +53,51 @@ Module R1CS.
            end
          end) (vars lc) (Some (const lc)).
 
-  Definition evalBilinearConstraint (ctx: Map Fp)(bc: BilinearConstraint) : option Fp :=
+  Definition evalBilinearConstraint (ctx: NMap Fp)(bc: BilinearConstraint) : option Fp :=
     match (evalLc ctx (a bc), evalLc ctx (b bc), evalLc ctx (c bc)) with
-    | (Some a, Some b, Some c) => Some (pkplus (pkmul a b) (pkopp c))
+    | (Some a, Some b, Some c) => Some (pksub (pkmul a b) c)
     | (_, _, _) => None
     end.
 
-  (** Predicates on R1cs valuations being correct *)
-  Definition checkBilinearConstraint(ctx: Map Fp) (bc: BilinearConstraint) :=
+  (** Predicates on R1cs valuations correct *)
+  Definition checkBilinearConstraint(ctx: NMap Fp) (bc: BilinearConstraint) :=
     evalBilinearConstraint ctx bc = Some fp_zero.
 
-  Definition checkR1cs(ctx: Map Fp)(r1cs: R1cs) := Forall (checkBilinearConstraint ctx) r1cs.
+  Check checkBilinearConstraint.
+  Definition checkR1cs(ctx: NMap Fp)(r1cs: R1cs) := Forall (checkBilinearConstraint ctx) r1cs.
+
+  (** Helper monadic notation on options *)
+  Notation "'return' e" := (Some e) (right associativity, at level 49).
+  Notation "' p <- e1 ;; e2"
+    := (match e1 with
+        | Some p => e2
+        | None => None
+        end)
+         (right associativity, p pattern, at level 60, e1 at next level).
+
+  Inductive first_order: typ -> Prop :=
+  | fo_field: first_order ty_field
+  | fo_bool: first_order ty_bool.
   
+  (** 1. We have STLC term m: [] |- m: t -> t
+      2. We need R1cs r, checkR1cs r
+      3. We have term m, 
+         eval ctx_inp m = (r, ctx')
+   *)
+  (** Compilation = solving *)
+
+  Fixpoint interp(ctx: NMap Fp)(e: exp) (normalizes: e -->* <{ fp v }>): option (Ctx * r1cs) :=
+    match e with
+    | tm_var_b n => (ctx, [])
+    | tm_var_f x => (ctx, [])
+    | tm_abs T e =>
+      (ctx2, p) <- compile ctx e (lc_trans lc) ;;
+      return (ctx2, p)
+    | tm_app e1 e2 =>
+      (ctx2, p1) <- compile ctx e
+      
+    | tm_let e1 e2 =>
+    | tm_binop a op_div b => 
+    | tm_constant c => (ctx, 
+
 End R1CS.

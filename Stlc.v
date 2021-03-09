@@ -16,7 +16,10 @@ Module Stlc_Fp.
   (** Prime  *)
   Variable p: Z.
   Hypothesis p_prime: prime p.
-
+  Print prime.
+  Hypothesis p_gt_1: p > 1.
+  Print p_gt_1.
+  
   Definition Fp := pK p.
   Definition fp_one := pkI p.
   Definition fp_zero := pkO p.
