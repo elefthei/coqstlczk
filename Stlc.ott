@@ -1,22 +1,58 @@
-metavar expvar, x, y, z ::= {{ repr-locally-nameless }}
+embed
+{{ coq
+(** For F_p *)
+Require Import Coqprime.elliptic.ZEll.
+Require Import Coq.ZArith.Znumtheory.
+Require Import Coq.ZArith.BinInt.
 
+
+Module Stlc_Fp.
+  (** Prime  *)
+  Variable p: Z.
+  Hypothesis p_prime: prime p.
+
+  Definition Fp := pK p.
+  Definition fp_one := pkI p.
+  Definition fp_zero := pkO p.
+
+  Lemma eq_field: forall (x y : Fp), {x = y} + {x <> y}.
+  Proof.
+    intros.
+    unfold Fp in *.
+    unfold pK in *.
+    destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
+    pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
+    inversion H.
+    Check GZnZ.zirr.
+    - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
+    - right. intro. inversion H1. contradiction.
+  Qed.
+  Hint Resolve eq_field: ott_coq_equality. }}
+
+metavar expvar, x, y, z ::= {{ repr-locally-nameless }}
+  
 grammar
 
-nat, n :: nat_ ::=          {{ coq nat }}
-  | [0]         ::  :: zero {{ coq [[0]] }}
-  | [ n1 + n2 ] ::  :: add  {{ coq ([[n1]] + [[n2]]) }}
-  | [ n1 - n2 ] ::  :: sub  {{ coq ([[n1]] - [[n2]]) }}
-  | [ n1 * n2 ] ::  :: mul  {{ coq ([[n1]] * [[n2]]) }}
-  | [ n1 / n2 ] ::  :: div  {{ coq ([[n1]] / [[n2]]) }}
+n :: fp_ ::=          {{ coq Fp }} {{ coq-equality }}
+  | [0]         ::  :: zero {{ coq [[fp_zero]] }}
+  | [1]         ::  :: one  {{ coq [[fp_one]] }}			
+  | [ n1 + n2 ] ::  :: add  {{ coq (pkplus [[n1]] [[n2]]) }}
+  | [ n1 - n2 ] ::  :: sub  {{ coq (pksub [[n1]] [[n2]]) }}
+  | [ n1 * n2 ] ::  :: mul  {{ coq (pkmul [[n1]] [[n2]]) }}
+  | [ n1 / n2 ] ::  :: div  {{ coq (pkdiv [[n1]] [[n2]]) }}
 
-typ, T, S :: ty_ ::= {{ coq-equality }}
+b :: bool_ ::=  {{ coq  bool }} {{ coq-equality }}
+  | true  ::  :: true {{ coq true }}
+  | false ::  :: false {{ coq false }}
+  
+typ, T :: ty_ ::= {{ coq-equality }}
   | bool     ::   :: bool
   | field    ::   :: field
+  | T1 * T2  ::   :: prod
   | T1 -> T2 ::   :: arrow
 
 constant, c :: const_ ::= {{ coq-equality }}
-  | true  :: :: true
-  | false :: :: false
+  | b     :: :: bool
   | n     :: :: field
 
 op, binop :: op_ ::= {{ coq-equality }}
@@ -37,6 +73,9 @@ exp, e, f, g :: tm_ ::= {{ coq-equality }}
   | e1 == e2               ::   :: eq
   | not e                  ::   :: not
   | if e then e1 else e2   ::   :: ifthenelse
+  | { e1 , e2 }            ::   :: pair
+  | fst e                  ::   :: proj_1
+  | snd e                  ::   :: proj_2	
   | ( e )                  :: S :: paren {{ coq ([[e]]) }}
   | { e2 / x } e1          :: M :: subst {{ coq (open_exp_wrt_exp [[x e1]] [[e2]]) }}
 
@@ -52,12 +91,13 @@ grammar
 
 typing_env, G, F, E :: '' ::= {{ coq list (atom*typ) }}
   | empty     ::   :: empty {{ coq nil }}
-  | G , x : T ::   :: cons  {{ coq ([[x]]~[[T]] ++ [[G]]) }}
+  | G , x : T ::   :: cons  {{ coq (one (pair [[x]] [[T]])) ++ [[G]]) }}
 
 
 value, v :: value_ ::=
   | \ x : T . e :: :: abs (+ bind x in e +)
-  | constant    :: :: constant 
+  | constant    :: :: constant
+  | { v1 , v2 } :: :: pair
   
 formula :: formula_ ::=
   | judgement      ::   :: judgement
@@ -129,6 +169,19 @@ G |- e1: T1
 G, x: T1 |- e2: T2
 --------------------------- :: let
 G |- let x:= e1 in e2 : T2
+
+G |- e1: T1
+G |- e2: T2
+------------------------ :: pair
+G |- { e1, e2 } : T1*T2
+
+G |- e: T1*T2
+--------------- :: proj_1
+G |- fst e : T1
+
+G |- e: T1*T2
+--------------- :: proj_2
+G |- snd e : T2
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -237,3 +290,31 @@ c == c --> true
 c1 <> c2
 ------------------- :: eq_neq
 c1 == c2 --> false
+
+%% Pairs
+------------------ :: pair_beta_1
+fst { e1, e2 } --> e1
+
+------------------ :: pair_beta_2
+snd { e1, e2 } --> e2
+
+e --> e'
+------------------ :: proj_cog_1
+fst e --> fst e'
+
+e --> e'
+------------------ :: proj_cog_2
+snd e --> snd e'
+
+e1 --> e1'
+--------------------- :: pair_cog_1
+{ e1, e2 } --> { e1', e2 }
+
+e2 --> e2'
+--------------------- :: pair_cog_2
+{ e1, e2 } --> { e1, e2' }
+
+
+embed
+{{ coq
+End Stlc_Fp. }}

@@ -16,16 +16,30 @@ Module Stlc_Fp.
   (** Prime  *)
   Variable p: Z.
   Hypothesis p_prime: prime p.
-  Print prime.
-  Hypothesis p_gt_1: p > 1.
-  Print p_gt_1.
-  
+
   Definition Fp := pK p.
   Definition fp_one := pkI p.
   Definition fp_zero := pkO p.
 
-  Definition fp_plus := pkplus.
+  Lemma eq_field: forall (x y : Fp), {x = y} + {x <> y}.
+  Proof.
+    intros.
+    unfold Fp in *.
+    unfold pK in *.
+    destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
+    pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
+    inversion H.
+    - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
+    - right. intro. inversion H1. contradiction.
+  Qed.
+  Hint Resolve eq_field: ott_coq_equality. 
 
+  Lemma eq_bool: forall (x y: bool), {x = y} + {x <> y}.
+  Proof.
+    decide equality; auto.
+  Qed.
+  Hint Resolve eq_bool: ott_coq_equality.
+  
   Inductive op : Set := 
   | op_add : op
   | op_sub : op
@@ -34,15 +48,15 @@ Module Stlc_Fp.
   | op_and : op
   | op_or : op.
 
-  Inductive constant : Set := 
-  | const_true : constant
-  | const_false : constant
-  | const_field (n: Fp).
-
   Inductive typ : Set := 
   | ty_bool : typ
   | ty_field : typ
+  | ty_prod (T1:typ) (T2:typ)
   | ty_arrow (T1:typ) (T2:typ).
+
+  Inductive constant : Set := 
+  | const_bool (b5:bool)
+  | const_field (n5:Fp).
 
   Inductive exp : Set := 
   | tm_var_b (_:nat)
@@ -54,39 +68,27 @@ Module Stlc_Fp.
   | tm_binop (e1:exp) (op5:op) (e2:exp)
   | tm_eq (e1:exp) (e2:exp)
   | tm_not (e:exp)
-  | tm_ifthenelse (e:exp) (e1:exp) (e2:exp).
+  | tm_ifthenelse (e:exp) (e1:exp) (e2:exp)
+  | tm_pair (e1:exp) (e2:exp)
+  | tm_proj_1 (e:exp)
+  | tm_proj_2 (e:exp).
 
   Definition typing_env : Set := list (atom*typ).
-
-  Lemma eq_fp: forall (x y : Fp), {x = y} + {x <> y}.
-  Proof.
-    intros.
-    unfold Fp in *.
-    unfold pK in *.
-    destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
-    pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
-    inversion H.
-    Check GZnZ.zirr.
-    - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
-    - right. intro. inversion H1. contradiction.
-  Qed.
-  Hint Resolve eq_fp: ott_coq_equality.
-
   Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
   Proof.
     decide equality; auto with ott_coq_equality arith.
   Defined.
   Hint Resolve eq_op : ott_coq_equality.
-  Lemma eq_constant: forall (x y : constant), {x = y} + {x <> y}.
-  Proof.
-    decide equality; auto with ott_coq_equality arith.
-  Defined.
-  Hint Resolve eq_constant : ott_coq_equality.
   Lemma eq_typ: forall (x y : typ), {x = y} + {x <> y}.
   Proof.
     decide equality; auto with ott_coq_equality arith.
   Defined.
   Hint Resolve eq_typ : ott_coq_equality.
+  Lemma eq_constant: forall (x y : constant), {x = y} + {x <> y}.
+  Proof.
+    decide equality; auto with ott_coq_equality arith.
+  Defined.
+  Hint Resolve eq_constant : ott_coq_equality.
   Lemma eq_exp: forall (x y : exp), {x = y} + {x <> y}.
   Proof.
     decide equality; auto with ott_coq_equality arith.
@@ -97,8 +99,7 @@ Module Stlc_Fp.
   (** auxiliary functions on the new list types *)
   (** library functions *)
   (** subrules *)
-  
-  Definition is_value_of_exp (e_5:exp) : bool :=
+  Fixpoint is_value_of_exp (e_5:exp) : bool :=
     match e_5 with
     | (tm_var_b nat) => false
     | (tm_var_f x) => false
@@ -110,13 +111,16 @@ Module Stlc_Fp.
     | (tm_eq e1 e2) => false
     | (tm_not e) => false
     | (tm_ifthenelse e e1 e2) => false
+    | (tm_pair e1 e2) => ((is_value_of_exp e1) && (is_value_of_exp e2))
+    | (tm_proj_1 e) => false
+    | (tm_proj_2 e) => false
     end.
 
   (** arities *)
   (** opening up abstractions *)
   Fixpoint open_exp_wrt_exp_rec (k:nat) (e_5:exp) (e__6:exp) {struct e__6}: exp :=
     match e__6 with
-    | (tm_var_b n) => if (k == n) then e_5 else (tm_var_b n)
+    | (tm_var_b nat) => if (k === nat) then e_5 else (tm_var_b nat)
     | (tm_var_f x) => tm_var_f x
     | (tm_abs T e) => tm_abs T (open_exp_wrt_exp_rec (S k) e_5 e)
     | (tm_app e1 e2) => tm_app (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
@@ -126,6 +130,9 @@ Module Stlc_Fp.
     | (tm_eq e1 e2) => tm_eq (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
     | (tm_not e) => tm_not (open_exp_wrt_exp_rec k e_5 e)
     | (tm_ifthenelse e e1 e2) => tm_ifthenelse (open_exp_wrt_exp_rec k e_5 e) (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
+    | (tm_pair e1 e2) => tm_pair (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
+    | (tm_proj_1 e) => tm_proj_1 (open_exp_wrt_exp_rec k e_5 e)
+    | (tm_proj_2 e) => tm_proj_2 (open_exp_wrt_exp_rec k e_5 e)
     end.
 
   Definition open_exp_wrt_exp e_5 e__6 := open_exp_wrt_exp_rec 0 e__6 e_5.
@@ -165,8 +172,17 @@ Module Stlc_Fp.
       (lc_exp e) ->
       (lc_exp e1) ->
       (lc_exp e2) ->
-      (lc_exp (tm_ifthenelse e e1 e2)).
-  
+      (lc_exp (tm_ifthenelse e e1 e2))
+  | lc_tm_pair : forall (e1 e2:exp),
+      (lc_exp e1) ->
+      (lc_exp e2) ->
+      (lc_exp (tm_pair e1 e2))
+  | lc_tm_proj_1 : forall (e:exp),
+      (lc_exp e) ->
+      (lc_exp (tm_proj_1 e))
+  | lc_tm_proj_2 : forall (e:exp),
+      (lc_exp e) ->
+      (lc_exp (tm_proj_2 e)).
   (** free variables *)
   Fixpoint fv_exp (e_5:exp) : vars :=
     match e_5 with
@@ -180,6 +196,9 @@ Module Stlc_Fp.
     | (tm_eq e1 e2) => (fv_exp e1) \u (fv_exp e2)
     | (tm_not e) => (fv_exp e)
     | (tm_ifthenelse e e1 e2) => (fv_exp e) \u (fv_exp e1) \u (fv_exp e2)
+    | (tm_pair e1 e2) => (fv_exp e1) \u (fv_exp e2)
+    | (tm_proj_1 e) => (fv_exp e)
+    | (tm_proj_2 e) => (fv_exp e)
     end.
 
   (** substitutions *)
@@ -195,11 +214,14 @@ Module Stlc_Fp.
     | (tm_eq e1 e2) => tm_eq (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
     | (tm_not e) => tm_not (subst_exp e_5 x5 e)
     | (tm_ifthenelse e e1 e2) => tm_ifthenelse (subst_exp e_5 x5 e) (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
+    | (tm_pair e1 e2) => tm_pair (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
+    | (tm_proj_1 e) => tm_proj_1 (subst_exp e_5 x5 e)
+    | (tm_proj_2 e) => tm_proj_2 (subst_exp e_5 x5 e)
     end.
 
   (** definitions *)
+
   (* defns Jtyping *)
-   
   Inductive typing : typing_env -> exp -> typ -> Prop :=    (* defn typing *)
   | typing_var : forall (G:typing_env) (x:expvar) (T:typ),
       binds ( x ) ( T ) ( G )  ->
@@ -213,11 +235,11 @@ Module Stlc_Fp.
       typing G e2 T1 ->
       typing G (tm_app e1 e2) T2
   | typing_true : forall (G:typing_env),
-      typing G (tm_constant const_true) ty_bool
+      typing G (tm_constant (const_bool  true )) ty_bool
   | typing_false : forall (G:typing_env),
-      typing G (tm_constant const_false) ty_bool
-  | typing_field : forall (G:typing_env) (n:Fp),
-      typing G (tm_constant (const_field n)) ty_field
+      typing G (tm_constant (const_bool  false )) ty_bool
+  | typing_field : forall (G:typing_env) (n5:Fp),
+      typing G (tm_constant (const_field n5)) ty_field
   | typing_boolop : forall (G:typing_env) (e1:exp) (op5:op) (e2:exp),
       typing G e1 ty_bool ->
       typing G e2 ty_bool ->
@@ -241,7 +263,17 @@ Module Stlc_Fp.
   | typing_let : forall (L:vars) (G:typing_env) (e1 e2:exp) (T2 T1:typ),
       typing G e1 T1 ->
       ( forall x , x \notin  L  -> typing  ( (one (pair x T1))  ++  G )   ( open_exp_wrt_exp e2 (tm_var_f x) )  T2 )  ->
-      typing G (tm_let e1 e2) T2.
+      typing G (tm_let e1 e2) T2
+  | typing_pair : forall (G:typing_env) (e1 e2:exp) (T1 T2:typ),
+      typing G e1 T1 ->
+      typing G e2 T2 ->
+      typing G (tm_pair e1 e2) (ty_prod T1 T2)
+  | typing_proj_1 : forall (G:typing_env) (e:exp) (T1 T2:typ),
+      typing G e (ty_prod T1 T2) ->
+      typing G (tm_proj_1 e) T1
+  | typing_proj_2 : forall (G:typing_env) (e:exp) (T2 T1:typ),
+      typing G e (ty_prod T1 T2) ->
+      typing G (tm_proj_2 e) T2.
 
   (* defns Jop *)
   Inductive step : exp -> exp -> Prop :=    (* defn step *)
@@ -262,39 +294,39 @@ Module Stlc_Fp.
   | step_if_true : forall (e1 e2:exp),
       lc_exp e2 ->
       lc_exp e1 ->
-      step (tm_ifthenelse (tm_constant const_true) e1 e2) e1
+      step (tm_ifthenelse (tm_constant (const_bool  true )) e1 e2) e1
   | step_if_false : forall (e1 e2:exp),
       lc_exp e1 ->
       lc_exp e2 ->
-      step (tm_ifthenelse (tm_constant const_false) e1 e2) e2
+      step (tm_ifthenelse (tm_constant (const_bool  false )) e1 e2) e2
   | step_not_true : 
-      step (tm_not (tm_constant const_true)) (tm_constant const_false)
+      step (tm_not (tm_constant (const_bool  true ))) (tm_constant (const_bool  false ))
   | step_not_false : 
-      step (tm_not (tm_constant const_false)) (tm_constant const_true)
+      step (tm_not (tm_constant (const_bool  false ))) (tm_constant (const_bool  true ))
   | step_and_1 : forall (e:exp),
       lc_exp e ->
-      step  ( (tm_binop e op_and (tm_constant const_true)) )  e
+      step  ( (tm_binop e op_and (tm_constant (const_bool  true ))) )  e
   | step_and_2 : forall (e:exp),
       lc_exp e ->
-      step  ( (tm_binop (tm_constant const_true) op_and e) )  e
+      step  ( (tm_binop (tm_constant (const_bool  true )) op_and e) )  e
   | step_and_3 : forall (e:exp),
       lc_exp e ->
-      step  ( (tm_binop e op_and (tm_constant const_false)) )  (tm_constant const_false)
+      step  ( (tm_binop e op_and (tm_constant (const_bool  false ))) )  (tm_constant (const_bool  false ))
   | step_and_4 : forall (e:exp),
       lc_exp e ->
-      step  ( (tm_binop (tm_constant const_false) op_and e) )  (tm_constant const_false)
+      step  ( (tm_binop (tm_constant (const_bool  false )) op_and e) )  (tm_constant (const_bool  false ))
   | step_or_1 : forall (e1:exp),
       lc_exp e1 ->
-      step  ( (tm_binop e1 op_or (tm_constant const_true)) )  (tm_constant const_true)
+      step  ( (tm_binop e1 op_or (tm_constant (const_bool  true ))) )  (tm_constant (const_bool  true ))
   | step_or_2 : forall (e1:exp),
       lc_exp e1 ->
-      step  ( (tm_binop (tm_constant const_true) op_or e1) )  (tm_constant const_true)
+      step  ( (tm_binop (tm_constant (const_bool  true )) op_or e1) )  (tm_constant (const_bool  true ))
   | step_or_3 : forall (e1:exp),
       lc_exp e1 ->
-      step  ( (tm_binop e1 op_or (tm_constant const_false)) )  e1
+      step  ( (tm_binop e1 op_or (tm_constant (const_bool  false ))) )  e1
   | step_or_4 : forall (e1:exp),
       lc_exp e1 ->
-      step  ( (tm_binop (tm_constant const_false) op_or e1) )  e1
+      step  ( (tm_binop (tm_constant (const_bool  false )) op_or e1) )  e1
   | step_let_v : forall (e2 v1:exp),
       Is_true (is_value_of_exp v1) ->
       lc_exp (tm_let v1 e2) ->
@@ -311,15 +343,15 @@ Module Stlc_Fp.
   | step_binop_cog_2 : forall (c1:constant) (op5:op) (e2 e2':exp),
       step e2 e2' ->
       step (tm_binop (tm_constant c1) op5 e2) (tm_binop (tm_constant c1) op5 e2')
-  | step_add_const : forall (n1 n2: Fp),
-      step (tm_binop (tm_constant (const_field n1)) op_add (tm_constant (const_field n2))) (tm_constant (const_field  ( pkplus n1  n2 ) ))
-  | step_sub_const : forall (n1 n2: Fp),
-      step (tm_binop (tm_constant (const_field n1)) op_sub (tm_constant (const_field n2))) (tm_constant (const_field  ( pksub n1 n2 ) ))
-  | step_mul_const : forall (n1 n2: Fp),
-      step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  ( pkmul n1 n2 ) ))
-  | step_div_const : forall (n1 n2: Fp),
-      (const_field n2)  <>  (const_field  fp_zero)  ->
-      step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  ( pkdiv n1  n2 ) ))
+  | step_add_const : forall (n1 n2:Fp),
+      step (tm_binop (tm_constant (const_field n1)) op_add (tm_constant (const_field n2))) (tm_constant (const_field  (pkplus  n1   n2 ) ))
+  | step_sub_const : forall (n1 n2:Fp),
+      step (tm_binop (tm_constant (const_field n1)) op_sub (tm_constant (const_field n2))) (tm_constant (const_field  (pksub  n1   n2 ) ))
+  | step_mul_const : forall (n1 n2:Fp),
+      step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  (pkmul  n1   n2 ) ))
+  | step_div_const : forall (n1 n2:Fp),
+      (const_field n2)  <>  (const_field  fp_zero )  ->
+      step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  (pkdiv  n1   n2 ) ))
   | step_eq_cog_1 : forall (e1 e2 e1':exp),
       lc_exp e2 ->
       step e1 e1' ->
@@ -328,11 +360,34 @@ Module Stlc_Fp.
       step e2 e2' ->
       step (tm_eq (tm_constant c1) e2) (tm_eq (tm_constant c1) e2')
   | step_eq_refl : forall (c:constant),
-      step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant const_true)
+      step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant (const_bool  true ))
   | step_eq_neq : forall (c1 c2:constant),
       c1  <>  c2  ->
-      step (tm_eq (tm_constant c1) (tm_constant c2)) (tm_constant const_false).
+      step (tm_eq (tm_constant c1) (tm_constant c2)) (tm_constant (const_bool  false ))
+  | step_pair_beta_1 : forall (e1 e2:exp),
+      lc_exp e2 ->
+      lc_exp e1 ->
+      step (tm_proj_1 (tm_pair e1 e2)) e1
+  | step_pair_beta_2 : forall (e1 e2:exp),
+      lc_exp e1 ->
+      lc_exp e2 ->
+      step (tm_proj_2 (tm_pair e1 e2)) e2
+  | step_proj_cog_1 : forall (e e':exp),
+      step e e' ->
+      step (tm_proj_1 e) (tm_proj_1 e')
+  | step_proj_cog_2 : forall (e e':exp),
+      step e e' ->
+      step (tm_proj_2 e) (tm_proj_2 e')
+  | step_pair_cog_1 : forall (e1 e2 e1':exp),
+      lc_exp e2 ->
+      step e1 e1' ->
+      step (tm_pair e1 e2) (tm_pair e1' e2)
+  | step_pair_cog_2 : forall (e1 e2 e2':exp),
+      lc_exp e1 ->
+      step e2 e2' ->
+      step (tm_pair e1 e2) (tm_pair e1 e2').
 
   (** infrastructure *)
   Hint Constructors typing step lc_exp : core.
 End Stlc_Fp.
+
