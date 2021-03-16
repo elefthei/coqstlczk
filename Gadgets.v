@@ -100,8 +100,6 @@ Module Gadgets.
 
   Definition circuit_equiv(c: exp) (c': exp): Prop :=
     forall (n: Fp), forall (w: Fp),
-        <{{ nil |- c :: Field -> Field }}> ->
-        <{{ nil |- c' :: Field -> Field -> Bool }}> ->
         (<{ c' (fp n) (fp w) }> -->* <{ true }> <->
         <{ c (fp n) }> -->* <{ fp w }>).
    
@@ -111,28 +109,22 @@ Module Gadgets.
   Ltac invert_log_solved H g := 
     solve [inversion H; fail; idtac "solved"] || invert H.
 
-  Ltac solve_stlc :=
-    repeat match goal with
-           | [ H: <{ (open_exp_wrt_exp _ _) }> -->* _ |- _ ] => idtac "cbn"; cbn in H
-           | [ H: <{ (open_exp_wrt_exp _ _) _ }> -->* _ |- _ ] => idtac "cbn"; cbn in H        
-           | [ H: step ?a ?b |- ?g ] => invert_log_solved H g
-           | [ H: ?a -->* ?b |- _ ] => inversion H; subst; clear H
-           end.
-
-  Lemma neq_const: forall a b, <{ fp a }> <> <{ fp b }> -> a <> b.
+  Lemma fp_mul_inv: forall n, n <> fp_zero -> pkmul (pkdiv fp_one n) n = fp_one.
   Proof.
     intros.
-    destruct (eq_fp a b).
-    - subst. contradiction.
-    - assumption.
+    pose proof (pKfth p_prime) as FT.
+    invert FT.
+    rewrite Fdiv_def.
+    invert F_R.
+    rewrite <- Rmul_assoc.
+    rewrite Finv_l.
+    rewrite Rmul_1_l.
+    reflexivity.
+    assumption.
   Qed.
 
-  Require Import Coq.setoid_ring.Field_theory.
-  Require Import Coq.ZArith.BinInt.
-  Print ring_theory.
-
-  Lemma fp_mul_div_n0 : forall n w, n <> fp_zero ->
-                             pkdiv (pkmul w n) n = w.
+  Lemma fp_mul_div : forall n w, n <> fp_zero ->
+                               pkdiv (pkmul w n) n = w.
   Proof.
     intros.
     pose proof (pKfth p_prime) as FT.
@@ -161,78 +153,78 @@ Module Gadgets.
     - intro. invert H0; contradiction.
   Qed.
 
-  (** This is not complete over all possible witnesses, but still passes *)
+  Ltac solve_stlc :=
+    repeat match goal with
+           | [ H: step ?a ?b |- ?g ] => invert_log_solved H g
+           | [ H: ?a -->* ?b |- _ ] => inversion H; subst; clear H
+           | [ H: _ |- _ -->* _ ] => idtac "forward" ; econstructor; fail
+           | [ H: _ |- Is_true _ ] => idtac "is_true"; constructor
+           | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+             idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L));
+             intros; cbn ;econstructor                                                           
+           | [ H: _ |- lc_exp <{ \_ : _, _ }> ] =>
+             idtac "intro binders 2"; apply (lc_tm_abs empty);
+             intros; cbn; econstructor
+           | [ H: _ |- lc_exp _ ] => idtac "lc_exp"; constructor
+           end.
+
+     
   Theorem div_gadget_equiv: div ~~ div_check.
   Proof.
     unfold circuit_equiv, div, div_check.
-    intros n w Hty Hty'.
+    intros n w.
     split; intro H; solve_stlc.
-    - econstructor.
-      eapply step_beta; repeat constructor.
-      + econstructor. intros. cbn.
-        constructor. constructor. constructor.
-      + cbn.
-        destruct (eq_fp n fp_zero).
-        * subst.
-          unfold pkmul in H9.
-          invert H9.
-          rewrite Zmult_comm in H0.
-          simpl in *.
-          pose proof (p_prime).
-          invert H.
-          rewrite Z.mod_0_l in H0.
-          rewrite Z.mod_1_l in H0.
-          invert H0.
-          assumption.
-          intro.
-          rewrite H in H1.
-          invert H1.
-        * econstructor.
-          eapply step_div_const.
-          intro.
-          invert H.
-          contradiction.
-          rewrite fp_mul_div_n0.         
-          eapply multi_refl.
-          assumption.
-    - econstructor.      
-      eapply step_app_1. repeat constructor.      
-      eapply step_beta. repeat constructor.
+    - destruct (eq_fp n fp_zero); econstructor.
+      (* n = 0 *)
+      eapply step_beta; solve_stlc.
+      cbn.
+      invert H9.          
+      cbn in H0.
+      rewrite Zmult_comm in H0.
+      pose proof (p_prime).
+      invert H.
+      rewrite Z.mod_0_l in H0.
+      rewrite Z.mod_1_l in H0.
+      invert H0.
+      assumption.
+      intro Hcontra.
+      rewrite Hcontra in H1.
+      invert H1.
+      (* n <> 0 *)
+      eapply step_beta; solve_stlc.
+      cbn.
       econstructor.
+      apply step_div_const.
+      apply neq_stlc_fp.
+      assumption.
+      pose proof (fp_mul_div n w n0).      
+      rewrite -> H.
+      apply multi_refl.
+    - econstructor. 
+      eapply step_app_1. constructor. 
+      eapply step_beta.
+      econstructor.
+      apply (lc_tm_abs empty).
       intros.
+      solve_stlc.
+      cbn.
+      solve_stlc.
+      econstructor.
       cbn.
       econstructor.
-      intros.
-      cbn.
-      repeat constructor.
-      repeat constructor.
+      eapply step_beta; solve_stlc.
       cbn.
       econstructor.
-    
-      eapply step_beta; repeat constructor.
-      econstructor.
-      intros.
-      cbn.      
-      repeat constructor.
-      cbn.
-      econstructor.
-      eapply step_eq_cog_1. repeat constructor.
+      apply step_eq_cog_1.
+      constructor.
       eapply step_mul_const.
-      pose proof (pKfth p_prime) as FT.
-      invert FT.
-      invert F_R.
-      rewrite Fdiv_def.
-      rewrite <- Rmul_assoc.
-      rewrite neq_stlc_fp in H5.
-      apply Finv_l in H5.
-      rewrite H5.
-      rewrite Rmul_1_l.
+      rewrite (fp_mul_inv).
       econstructor.
       eapply step_eq_refl.
       apply multi_refl.
-      Unshelve.
-      (** Some atoms are left as holes! How to specify? *)
-  Admitted.
+      apply neq_stlc_fp.
+      assumption.
+  Qed.
  
   Fixpoint constant_to_boolnat(c: constant) : Fp :=
     match c with
@@ -246,7 +238,7 @@ Module Gadgets.
   Definition ite(c: constant):=
     <{ \_: Field,
            (\_: Field,
-                if c then #2 else #3
+                if c then #0 else #1
            )
      }>.
   
@@ -254,17 +246,10 @@ Module Gadgets.
     <{ \_: Field,
            (\_: Field,
                 (\_: Field,
-                     (#3 == #1 + {constant_to_boolnat c} * (#2 - #1))
+                     (#2 == #0 + {constant_to_boolnat c} * (#1 - #0))
                 )
            )
      }>.
-
-  Theorem ite_equiv_1: forall c, ite c ~ ite_check c.
-  Proof.
-    intros.
-    unfold circuit_equiv1, ite, ite_check.
-    destruct 0; induction 0; exists fp_zero; split; intro H; solve.
-  Qed.
 
   Theorem ite_equiv_2: forall c, ite c ~~ ite_check c.
   Proof.
@@ -273,8 +258,4 @@ Module Gadgets.
     intros; split; intro H; solve.
   Qed.
 
-  repeat match goal with
-               | [ _ |- _ -->* _ ] => econstructor
-               | [ _ |- step <{ (\_: ?F, _) _ }>  _ => idtac "beta"; eapply step_beta
-               | [ _
 End Gadgets.     
