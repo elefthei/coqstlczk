@@ -5,7 +5,6 @@ Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinInt.
 
-
 Module Stlc_Fp.
   (** Prime  *)
   Variable p: Z.
@@ -27,7 +26,13 @@ Module Stlc_Fp.
     - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
     - right. intro. inversion H1. contradiction.
   Qed.
-  Hint Resolve eq_field: ott_coq_equality. }}
+  Hint Resolve eq_field: ott_coq_equality.
+  Lemma eq_bool: forall (x y: bool), {x = y} + {x <> y}.
+  Proof.
+    decide equality; auto.
+  Qed.
+  Hint Resolve eq_bool: ott_coq_equality.
+End Stlc_Fp. }}
 
 metavar expvar, x, y, z ::= {{ repr-locally-nameless }}
   
@@ -75,7 +80,8 @@ exp, e, f, g :: tm_ ::= {{ coq-equality }}
   | if e then e1 else e2   ::   :: ifthenelse
   | { e1 , e2 }            ::   :: pair
   | fst e                  ::   :: proj_1
-  | snd e                  ::   :: proj_2	
+  | snd e                  ::   :: proj_2
+  | cast e                 ::   :: cast
   | ( e )                  :: S :: paren {{ coq ([[e]]) }}
   | { e2 / x } e1          :: M :: subst {{ coq (open_exp_wrt_exp [[x e1]] [[e2]]) }}
 
@@ -91,7 +97,7 @@ grammar
 
 typing_env, G, F, E :: '' ::= {{ coq list (atom*typ) }}
   | empty     ::   :: empty {{ coq nil }}
-  | G , x : T ::   :: cons  {{ coq (one (pair [[x]] [[T]])) ++ [[G]]) }}
+  | G , x : T ::   :: cons  {{ coq ((one (pair [[x]] [[T]])) ++ [[G]]) }}
 
 
 value, v :: value_ ::=
@@ -182,6 +188,10 @@ G |- fst e : T1
 G |- e: T1*T2
 --------------- :: proj_2
 G |- snd e : T2
+
+G |- e: bool
+---------------------- :: cast
+G |- cast e: field
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -307,14 +317,23 @@ e --> e'
 snd e --> snd e'
 
 e1 --> e1'
---------------------- :: pair_cog_1
+--------------------------- :: pair_cog_1
 { e1, e2 } --> { e1', e2 }
 
 e2 --> e2'
---------------------- :: pair_cog_2
+--------------------------- :: pair_cog_2
 { e1, e2 } --> { e1, e2' }
 
+%% Casting
 
-embed
-{{ coq
-End Stlc_Fp. }}
+------------------------- :: cast_true
+cast true --> [1]
+
+------------------------- :: cast_false
+cast false --> [0]
+
+e --> e'
+-------------------------- :: cast_cog
+cast e --> cast e'
+
+

@@ -11,7 +11,6 @@ Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinInt.
 
-
 Module Stlc_Fp.
   (** Prime  *)
   Variable p: Z.
@@ -29,17 +28,18 @@ Module Stlc_Fp.
     destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
     pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
     inversion H.
+    Check GZnZ.zirr.
     - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
     - right. intro. inversion H1. contradiction.
   Qed.
-  Hint Resolve eq_field: ott_coq_equality. 
-
+  Hint Resolve eq_field: ott_coq_equality.
   Lemma eq_bool: forall (x y: bool), {x = y} + {x <> y}.
   Proof.
     decide equality; auto.
   Qed.
   Hint Resolve eq_bool: ott_coq_equality.
-  
+
+
   Inductive op : Set := 
   | op_add : op
   | op_sub : op
@@ -71,7 +71,8 @@ Module Stlc_Fp.
   | tm_ifthenelse (e:exp) (e1:exp) (e2:exp)
   | tm_pair (e1:exp) (e2:exp)
   | tm_proj_1 (e:exp)
-  | tm_proj_2 (e:exp).
+  | tm_proj_2 (e:exp)
+  | tm_cast (e:exp).
 
   Definition typing_env : Set := list (atom*typ).
   Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
@@ -114,6 +115,7 @@ Module Stlc_Fp.
     | (tm_pair e1 e2) => ((is_value_of_exp e1) && (is_value_of_exp e2))
     | (tm_proj_1 e) => false
     | (tm_proj_2 e) => false
+    | (tm_cast e) => false
     end.
 
   (** arities *)
@@ -133,6 +135,7 @@ Module Stlc_Fp.
     | (tm_pair e1 e2) => tm_pair (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
     | (tm_proj_1 e) => tm_proj_1 (open_exp_wrt_exp_rec k e_5 e)
     | (tm_proj_2 e) => tm_proj_2 (open_exp_wrt_exp_rec k e_5 e)
+    | (tm_cast e) => tm_cast (open_exp_wrt_exp_rec k e_5 e)
     end.
 
   Definition open_exp_wrt_exp e_5 e__6 := open_exp_wrt_exp_rec 0 e__6 e_5.
@@ -182,7 +185,11 @@ Module Stlc_Fp.
       (lc_exp (tm_proj_1 e))
   | lc_tm_proj_2 : forall (e:exp),
       (lc_exp e) ->
-      (lc_exp (tm_proj_2 e)).
+      (lc_exp (tm_proj_2 e))
+  | lc_tm_cast : forall (e:exp),
+      (lc_exp e) ->
+      (lc_exp (tm_cast e)).
+
   (** free variables *)
   Fixpoint fv_exp (e_5:exp) : vars :=
     match e_5 with
@@ -199,6 +206,7 @@ Module Stlc_Fp.
     | (tm_pair e1 e2) => (fv_exp e1) \u (fv_exp e2)
     | (tm_proj_1 e) => (fv_exp e)
     | (tm_proj_2 e) => (fv_exp e)
+    | (tm_cast e) => (fv_exp e)
     end.
 
   (** substitutions *)
@@ -217,7 +225,9 @@ Module Stlc_Fp.
     | (tm_pair e1 e2) => tm_pair (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
     | (tm_proj_1 e) => tm_proj_1 (subst_exp e_5 x5 e)
     | (tm_proj_2 e) => tm_proj_2 (subst_exp e_5 x5 e)
+    | (tm_cast e) => tm_cast (subst_exp e_5 x5 e)
     end.
+
 
   (** definitions *)
 
@@ -228,7 +238,7 @@ Module Stlc_Fp.
       uniq ( G )  ->
       typing G (tm_var_f x) T
   | typing_abs : forall (L:vars) (G:typing_env) (T1:typ) (e:exp) (T2:typ),
-      ( forall x , x \notin  L  -> typing  ( (one (pair x T1))  ++  G )   ( open_exp_wrt_exp e (tm_var_f x) )  T2 )  ->
+      ( forall x , x \notin  L  -> typing  ((one (pair  x   T1 )) ++  G )   ( open_exp_wrt_exp e (tm_var_f x) )  T2 )  ->
       typing G (tm_abs T1 e) (ty_arrow T1 T2)
   | typing_app : forall (G:typing_env) (e1 e2:exp) (T2 T1:typ),
       typing G e1 (ty_arrow T1 T2) ->
@@ -262,7 +272,7 @@ Module Stlc_Fp.
       typing G (tm_ifthenelse e e1 e2) T
   | typing_let : forall (L:vars) (G:typing_env) (e1 e2:exp) (T2 T1:typ),
       typing G e1 T1 ->
-      ( forall x , x \notin  L  -> typing  ( (one (pair x T1))  ++  G )   ( open_exp_wrt_exp e2 (tm_var_f x) )  T2 )  ->
+      ( forall x , x \notin  L  -> typing  ((one (pair  x   T1 )) ++  G )   ( open_exp_wrt_exp e2 (tm_var_f x) )  T2 )  ->
       typing G (tm_let e1 e2) T2
   | typing_pair : forall (G:typing_env) (e1 e2:exp) (T1 T2:typ),
       typing G e1 T1 ->
@@ -273,7 +283,10 @@ Module Stlc_Fp.
       typing G (tm_proj_1 e) T1
   | typing_proj_2 : forall (G:typing_env) (e:exp) (T2 T1:typ),
       typing G e (ty_prod T1 T2) ->
-      typing G (tm_proj_2 e) T2.
+      typing G (tm_proj_2 e) T2
+  | typing_cast : forall (G:typing_env) (e:exp),
+      typing G e ty_bool ->
+      typing G (tm_cast e) ty_field.
 
   (* defns Jop *)
   Inductive step : exp -> exp -> Prop :=    (* defn step *)
@@ -385,9 +398,17 @@ Module Stlc_Fp.
   | step_pair_cog_2 : forall (e1 e2 e2':exp),
       lc_exp e1 ->
       step e2 e2' ->
-      step (tm_pair e1 e2) (tm_pair e1 e2').
+      step (tm_pair e1 e2) (tm_pair e1 e2')
+  | step_cast_true : 
+      step (tm_cast (tm_constant (const_bool  true ))) (tm_constant (const_field  fp_one ))
+  | step_cast_false : 
+      step (tm_cast (tm_constant (const_bool  false ))) (tm_constant (const_field  fp_zero ))
+  | step_cast_cog : forall (e e':exp),
+      step e e' ->
+      step (tm_cast e) (tm_cast e').
 
   (** infrastructure *)
   Hint Constructors typing step lc_exp : core.
-End Stlc_Fp.
 
+
+End Stlc_Fp. 
