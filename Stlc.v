@@ -28,7 +28,6 @@ Module Stlc_Fp.
     destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
     pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
     inversion H.
-    Check GZnZ.zirr.
     - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
     - right. intro. inversion H1. contradiction.
   Qed.

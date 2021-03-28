@@ -38,7 +38,7 @@ Module Gadgets.
                      t custom stlc_ty at level 99,
                      y custom stlc at level 80,
                      left associativity).
-  Notation "# n" := (tm_var_b n%nat) (in custom stlc at level 1).
+  Notation "# n" := (tm_var_b n%nat) (in custom stlc at level 0).
   Notation "{ x }" := x (in custom stlc at level 1, x constr).
 
   Notation "S -> T" := (ty_arrow S T) (in custom stlc_ty at level 2, right associativity).
@@ -46,7 +46,7 @@ Module Gadgets.
                                                                        
   Notation "'Field'" := ty_field (in custom stlc_ty at level 0).
   Notation "'Bool'" := ty_bool (in custom stlc_ty at level 0).
-  Notation "a '*' b" := (ty_prod a b) (in custom stlc_ty at level 1, left associativity).
+  Notation "a * b" := (ty_prod a b) (in custom stlc_ty at level 1, left associativity).
   
   Notation "x + y" := (tm_binop x op_add y) (in custom stlc at level 2,
                                                 left associativity).
@@ -105,5 +105,64 @@ Module Gadgets.
       (<{ c' n w }> -->* <{ true }> <->
        <{ c n }> -->* <{ w }>).
   Notation "a ~= b" := (circuit_equiv_poly a b) (at level 99).
+
+  Definition div_check :=
+    <{ \_: Field,
+           (\_: Field,
+                (#0 * #1) == F1)
+     }>.
+
+
+  Fixpoint normalize(e: exp) :=
+    match e with
+    | tm_app (tm_abs T e1) v1 =>
+      open_exp_wrt_exp (normalize e1) (normalize v1)
+    | tm_abs T e => tm_abs T (normalize e)
+    | tm_app e1 e2 => tm_app (normalize e1) (normalize e2)
+    | tm_let e1 e2 =>
+      open_exp_wrt_exp (normalize e2) (normalize e1)
+    | tm_binop a op b =>
+      tm_binop (normalize a) op (normalize b)
+    | tm_eq e1 e2 =>
+      tm_eq (normalize e1) (normalize e2)
+    | tm_not e1 => tm_not (normalize e1)
+    | tm_ifthenelse e e1 e2 =>
+      tm_ifthenelse (normalize e) (normalize e1) (normalize e2)
+    | tm_pair e1 e2 =>
+      tm_pair (normalize e1) (normalize e2)
+    | tm_proj_1 e => tm_proj_1 (normalize e)
+    | tm_proj_2 e => tm_proj_2 (normalize e)
+    | e => e
+    end.
   
- End Gadgets.     
+  Fixpoint normalizer(e: exp)(gas: nat): exp :=
+    match gas with
+    | 0%nat => e
+    | S g' => normalizer (normalize e) g'
+    end.
+        
+  Eval simpl in normalizer <{ div_check (fp fp_one) (fp fp_one) }> 3.
+
+  Ltac invert x := inversion x; clear x; subst.
+  Locate "-->*".
+
+  Inductive big_step_k: exp -> exp -> nat -> Prop :=
+  | big_step_refl: forall e,
+      big_step_k e e 0
+  | big_step_trans: forall a b c n,
+      step a b ->
+      big_step_k b c n ->
+      big_step_k a c (S n).
+
+
+  Theorem normalize_bigstep: forall e v, e-->*v -> normalize e -->* v.
+    induction 0; cbn; auto; intros.
+    - invert H; cbn.
+      + apply multi_refl.
+      +
+  Admitted.
+ 
+
+  
+      
+End Gadgets.     

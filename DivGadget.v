@@ -1,6 +1,7 @@
 Require Import Metalib.Metatheory.
 From STLCZK Require Import Stlc.
 From STLCZK Require Import Gadgets.
+From STLCZK Require Import R1cs.
 
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.Numbers.BinNums.
@@ -12,17 +13,19 @@ Require Import Coq.ZArith.BinInt.
 
 Module DivGadget.
   Include Gadgets.
-
+  Include R1cs.
   (** Example 1: Division *)
   Definition div :=
     <{ \_: Field, (F1 / #0) }>.
 
+  Locate "*".
   Definition div_check :=
     <{ \_: Field,
            (\_: Field,
                 (#0 * #1) == F1)
      }>.
-  
+
+  Compute normalize_all <{ div_check fp_one fp_one }>.
   Ltac invert H := inversion H; subst; clear H.
   Ltac invert_log_solved H g := 
     solve [inversion H; fail; idtac "solved"] || invert H.
@@ -113,7 +116,7 @@ Module DivGadget.
            | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
              idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
            | [ |- lc_exp <{ \_ : _, _ }> ] =>
-             idtac "intro binders 2"; apply (lc_tm_abs empty); intros
+             idtac "empty binders"; apply (lc_tm_abs empty); intros
            | [ |- lc_exp _ ] => idtac "lc_exp"; constructor
            | [ H: context[open_exp_wrt_exp _ _] |- _] => cbn in H
            | [ |- context[open_exp_wrt_exp _ _] ] => cbn

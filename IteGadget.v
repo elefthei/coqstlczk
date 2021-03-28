@@ -22,15 +22,15 @@ Module IteGadget.
      }>.
   
   Definition ite_check(c: constant) :=
-    <{ \_: Field,
-           \_: Bool,
+    <{ \_: Bool,
+           \_: Field,
                \_: Field,
                    \_: Field,
-                       #3 == #1 + #0 * (#2 - #1)
+                       #3 == #1 + (cast #0) * (#2 - #1)
                     
      }>.
 
-  Definition ite_curried :=
+  Definition ite_uncurried :=
     <{ \_: Bool * Field * Field,
            let fst (fst #0) in (* bool *)
            let snd (fst #0) in (* field *)
@@ -38,7 +38,7 @@ Module IteGadget.
            if #1 then #2 else #3
      }>.
 
-  Definition ite_check_curried :=
+  Definition ite_check_uncurried :=
     <{ \_: Bool * Field * Field * Field,
            let fst (fst (fst #0)) in (* bool *)
            let snd (fst (fst #0)) in (* field *)
