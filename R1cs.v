@@ -1,93 +1,17 @@
 Require Import Metalib.Metatheory.
-From STLCZK Require Import Gadgets.
+From STLCZK Require Import GaloisField.
 
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.Numbers.BinNums.
-Require Export FMapAVL.
-Require Export Coq.Structures.OrderedTypeEx.
-
-
-
-Module QAP.
-  Include Gadgets.
-  Module M := FMapAVL.Make(Nat_as_OT).  
-  (** Maps *)
-  Definition NMap: Type -> Type := M.t.
-  Definition find k (m: NMap Fp) := M.find k m.
-  Definition update (p: nat * Fp) (m: NMap Fp) :=
-    match p with
-    | (f, s) => M.add f s m
-    end.
-
-  Notation "k |-> v" := (pair k v) (at level 60).
-  Notation "[ ]" := (M.empty Fp).
-  Notation "[ p1 , .. , pn ]" := (update p1 .. (update pn (M.empty Fp)) .. ).
-
-  (** Linear combination sum (map (\a,b -> a* find b ctx)) + const *)
-  (** eval { (3, a), (2,b) }, 4 ==> 3 * find ctx a + 2 * find ctx b + 4 *)
-  Record Lc : Type :=
-    mkLc {
-        vars: NMap Fp;
-        const: Fp
-      }.
-
-  (** eval a + eval b = eval c *)
-  Record BilinearConstraint: Type :=
-    mkBilinearConstraint {
-        a: Lc;
-        b: Lc;
-        c: Lc;
-      }.
-
-  Definition R1cs := list BilinearConstraint.
-
-  Inductive Circuit :=
-  | Add (a: Circuit) (b: Circuit)
-  | Mul (a: Circuit) (b: Circuit)
-  | In (index: nat)
-  | Witness (index: nat)
-  | Const (f: Fp).
-  
-  (** Evaluate LC like this: const + (sum . map (+) $ vars) == 0 *)
-  Definition evalLc(ctx: NMap Fp)(lc: Lc): option Fp :=
-    M.fold
-      (fun i v acc =>
-         match acc with
-         | None => None
-         | Some acc =>
-           match find i ctx with
-           | Some vv => Some (pkplus acc (pkmul vv v))
-           | None => None
-           end
-         end) (vars lc) (Some (const lc)).
-
-  Definition evalBilinearConstraint (ctx: NMap Fp)(bc: BilinearConstraint) : option Fp :=
-    match (evalLc ctx (a bc), evalLc ctx (b bc), evalLc ctx (c bc)) with
-    | (Some a, Some b, Some c) => Some (pksub (pkmul a b) c)
-    | (_, _, _) => None
-    end.
-
-  (** Predicates on R1cs valuations correct *)
-  Definition checkBilinearConstraint(ctx: NMap Fp) (bc: BilinearConstraint) :=
-    evalBilinearConstraint ctx bc = Some fp_zero.
-
-  Check checkBilinearConstraint.
-  Definition checkR1cs(ctx: NMap Fp)(r1cs: R1cs) : Prop := Forall (checkBilinearConstraint ctx) r1cs.
-
-  (** Helper monadic notation on options *)
-  Notation "'return' e" := (Some e) (right associativity, at level 49).
-  Notation "' p <- e1 ;; e2"
-    := (match e1 with
-        | Some p => e2
-        | None => None
-        end)
-         (right associativity, p pattern, at level 60, e1 at next level).
-
- 
-End QAP.
-
+Require Import Coqprime.elliptic.GZnZ.
 Require Import ExtLib.Data.Monads.StateMonad.
 Require Import ExtLib.Structures.Monads.
+Require Import Coq.ZArith.BinIntDef.
+Import Z.
+Require Import Coq.Init.Nat.
+Require Import Coq.Vectors.VectorDef.
+Require Import Coq.Vectors.Fin.
+Require Import Coq.micromega.Lia.
 
 (**
    1. Use a state monad to compile equations to R1CS
@@ -103,46 +27,205 @@ Require Import ExtLib.Structures.Monads.
               ...
             }
       And (e: exp) -> e_check: R1CS and proof proof_e: e ~ e_check.
-*) 
+ *)
+
 Module R1CS.
-  Include Gadgets.
-  Module Pair_Nats_OT := PairOrderedType Nat_as_OT Nat_as_OT.
-  Module M := FMapAVL.Make(Pair_Nats_OT).
+  Include GaloisField.
+  
+  Inductive Term: Set :=
+  | Input (n: nat)
+  | Var (w: nat)
+  | Ones.
 
-  (** Maps *)
-  Definition PMap: Type -> Type := M.t.
-  Definition find k (m: PMap Fp) := M.find k m.
-  Definition update (p: nat * nat * Fp) (m: PMap Fp) :=
-    match p with
-    | (a, b, v) => M.add (a, b) m
-    end.
-
-  Notation "k |-> v" := (pair k v) (at level 60).
-  Notation "[ ]" := (M.empty Fp).
-  Notation "[ p1 , .. , pn ]" := (update p1 .. (update pn (M.empty Fp)) .. ).
-
-  Record Constraints{F: Type} (f: F) :=
-    mkConstraints {
-        num_witness: nat;
-        num_inputs: nat;
-        num_constraints: nat;
-        A: PMap F; (** (num constraint, index of term i) -> Fp *)
-        B: PMap F;
-        C: PMap F
+  Record Constraint :=
+    mkConstraint {
+        a: list (Fp * Term);
+        b: list (Fp * Term);
+        c: list (Fp * Term);
       }.
 
-  Definition Constraint := state (Constraints Fp).
+  Definition R1cs := list Constraint.
 
-  Set Typeclasses Debug. 
-  Definition witness: Constraint nat :=
-    bind get (fun x => num_witness).
-    
-  (** 1. We have STLC term m: [] |- m: t -> t
-      2. We need R1cs r, checkR1cs r
-      3. We have term m, 
-         eval ctx_inp m = (r, ctx')
-   *)
-  (** Compilation = solving *)
-  
-  
+  Declare Custom Entry r1cs.
+
+  Notation "<[ e ]>" := e (e custom r1cs at level 90).
+  Notation "z 'i[' n ']'" :=
+    (to_p z, Input n%nat)
+      (in custom r1cs at level 2,
+          n constr at level 0,
+          z constr at level 0).
+  Notation "z 'v[' n ']'" :=
+    (to_p z, Var n%nat)
+      (in custom r1cs at level 2,
+          n constr at level 0,
+          z constr at level 0).
+  Notation "{ x }" := x (in custom r1cs, x constr).
+  Notation "( a1 + .. + a2 )" :=
+    (cons a1 .. (cons a2 nil) ..)
+      (in custom r1cs at level 4,
+          a1 custom r1cs at level 2,
+          a2 custom r1cs at level 2,
+          left associativity).
+  Notation "# a * b == c" :=
+    (mkConstraint a b c)
+      (in custom r1cs at level 90,
+          a custom r1cs at level 4,
+          b custom r1cs at level 4,
+          c custom r1cs at level 4,
+          left associativity).
+
+  Definition bar := <[ 3v[3] ]>.
+  Fail Definition foo :=
+    <[ # (3i[3] + 3i[4]) * (3i[3]) == (1i[1]) ]>.
+   
 End R1CS.
+
+Module R1CSdep.
+  Include GaloisField.
+
+  Definition Vfp := Vector.t Fp.
+  
+  Inductive term: nat -> nat -> Set :=
+  | input: forall (n: nat), term (S n) 0
+  | var: forall (n: nat), term 0 (S n)
+  | one: term 0 0.
+
+  Inductive additions: nat -> nat -> Type :=
+  | ahead: forall m n, Fp * term m n -> additions m n
+  | atail: forall a b c d,
+      Fp * term a b ->
+      additions c d ->
+      additions (max a c) (max b d).
+  
+  Definition max3(a b c: nat) := max a (max b c).
+  Hint Unfold max3: core.
+
+  Inductive constraint: nat -> nat -> Type :=
+  | lc: forall a b c d e f
+      (A: additions a b)
+      (B: additions c d)
+      (C: additions e f),
+      constraint (max3 a c e) (max3 b d f).
+
+  Inductive r1cs: nat -> nat -> nat -> Type :=
+  | rhead: forall m n,
+      constraint m n ->
+      r1cs 1 m n
+  | rtail: forall a b c d n,
+      constraint a b ->
+      r1cs n c d ->
+      r1cs (S n) (max a c) (max b d).
+
+  Arguments additions {m} {n}.
+  Arguments ahead {m} {n}.
+  Arguments atail {a} {b} {c} {d}.
+  Arguments constraint {a} {b}.
+  Arguments lc {a} {b} {c} {d} {e} {f}.
+  Arguments rhead {m} {n}.
+  Arguments rtail {a} {b} {c} {d} {n}.
+  Arguments r1cs {a} {b} {c}.
+
+  (** syntax *)
+  Declare Custom Entry r1cs.
+  Notation "<[ e ]>" := e (e custom r1cs at level 90).
+  Notation "z 'i[' n ']'" :=
+    (to_p z, input n%nat)
+      (in custom r1cs at level 2,
+          n constr at level 0,
+          z constr at level 0).
+  Notation "z 'v[' n ']'" :=
+    (to_p z, var n%nat)
+      (in custom r1cs at level 2,
+          n constr at level 0,
+          z constr at level 0).
+  Notation "{ x }" := x (in custom r1cs, x constr).
+  Notation "( a )" :=
+    (ahead a) (in custom r1cs at level 4, a custom r1cs at level 2).
+
+  Notation "( a1 + .. + a2 + a3 )" :=
+    (atail a1 .. (atail a2 (ahead a3)) ..)
+      (in custom r1cs at level 4,
+          a1 custom r1cs at level 2,
+          a2 custom r1cs at level 2,
+          a3 custom r1cs at level 2).
+
+  Notation "# a * b == c" :=
+    (lc a b c)
+      (in custom r1cs at level 90,
+          a custom r1cs at level 4,
+          b custom r1cs at level 4,
+          c custom r1cs at level 4,
+          left associativity).
+
+  Definition foo :=
+    <[ # (3i[3] + 3i[4]) * ( 3i[3] ) == (1i[1]) ]>.
+
+  Lemma le_lt_Sn_m: forall n m, S n <= m -> n < m. lia. Qed.
+  
+  Set Printing Implicit.
+  Fixpoint eval_additions{i v i' v'}
+           (adds: @additions i v)
+           (inputs: Vfp i')
+           (vars: Vfp v'): i <= i' -> v <= v' -> Fp.
+    invert adds; intros.
+    - invert H; invert H3.
+      + apply le_lt_Sn_m in H0; clear H1.
+        exact (pkmul H2 (Vector.nth inputs (Fin.of_nat_lt H0))). (** Fp * Input term *)
+      + apply le_lt_Sn_m in H1; clear H0.
+        exact (pkmul H2 (Vector.nth vars (Fin.of_nat_lt H1))).   (** Fp * Var term *)
+      + exact H2. (** Fp * 1 (One) term *)
+    - specialize (eval_additions _ _ _ _ H0 inputs vars) as Hprev.
+      pose proof (Nat.max_lub_r _ _ _ H1).
+      pose proof (Nat.max_lub_r _ _ _ H2).
+      pose proof (Nat.max_lub_l _ _ _ H1).
+      pose proof (Nat.max_lub_l _ _ _ H2).
+      clear H1 H2.
+      invert H; invert H2.
+      + apply le_lt_Sn_m in H5; clear H6.
+        exact (pkplus (Hprev H3 H4) (pkmul H1 (Vector.nth inputs (Fin.of_nat_lt H5)))).
+      + apply le_lt_Sn_m in H6; clear H5.
+        exact (pkplus (Hprev H3 H4) (pkmul H1 (Vector.nth vars (Fin.of_nat_lt H6)))).
+      + exact (pkplus (Hprev H3 H4) H1).
+  Defined.
+
+  Fixpoint eval_constraint{i v i' v'}
+           (ctr: @constraint i v)
+           (inputs: Vfp i')
+           (vars: Vfp v') : i <= i' -> v <= v' -> Fp.
+    invert ctr.
+    intros.
+    unfold max3 in *.
+    pose proof (Nat.max_lub_r _ _ _ H).
+    pose proof (Nat.max_lub_r _ _ _ H0).
+    pose proof (Nat.max_lub_l _ _ _ H).
+    pose proof (Nat.max_lub_l _ _ _ H0).
+    pose proof (Nat.max_lub_r _ _ _ H1).
+    pose proof (Nat.max_lub_r _ _ _ H2).
+    pose proof (Nat.max_lub_l _ _ _ H1).
+    pose proof (Nat.max_lub_l _ _ _ H2).
+    clear H H0 H1 H2.
+    pose proof (eval_additions A inputs vars H3 H4) as SumA.
+    pose proof (eval_additions B inputs vars H7 H8) as SumB.
+    pose proof (eval_additions C inputs vars H5 H6) as SumC.
+    exact (pksub (pkmul SumA SumB) SumC). (** A*B - C *)
+  Defined.
+
+  Fixpoint eval{n i v i' v'}
+           (r: @r1cs n i v)
+           (inputs: Vfp i')
+           (vars: Vfp v'): i <= i' -> v <= v' -> Vfp n.
+  Proof.
+    intros.
+    invert r.
+    - pose proof (eval_constraint H1 inputs vars H H0) as CtrEval.
+      exact (Vector.cons Fp CtrEval 0 (Vector.nil Fp)).
+    - pose proof (Nat.max_lub_r _ _ _ H).
+      pose proof (Nat.max_lub_l _ _ _ H).
+      pose proof (Nat.max_lub_r _ _ _ H0).
+      pose proof (Nat.max_lub_l _ _ _ H0).         
+      pose proof (eval _ _ _ _ _ H2 inputs vars H3 H5) as Hprev.
+      pose proof (eval_constraint H1 inputs vars H4 H6) as CtrEval.
+      exact (Vector.cons Fp CtrEval n0 Hprev).
+  Defined.
+      
+End R1CSdep.

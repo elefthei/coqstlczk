@@ -10,7 +10,7 @@ Import Z.
 Require Import Coq.ZArith.BinInt.
 
 Module Gadgets.
-
+  Include GaloisField.
   Include Stlc_Fp.
 
   (** Notation on Stlc_Ott *)
@@ -21,8 +21,8 @@ Module Gadgets.
   Declare Custom Entry stlc.
   Notation "'fp' n" := (const_field n) (in custom stlc at level 0).
   Notation "'fb' b" := (const_bool b) (in custom stlc at level 0).
-  Notation "'F0'" := (const_field fp_zero) (in custom stlc at level 0).
-  Notation "'F1'" := (const_field fp_one) (in custom stlc at level 0).
+  Notation "'F0'" := (const_field 0:%p) (in custom stlc at level 0).
+  Notation "'F1'" := (const_field 1:%p) (in custom stlc at level 0).
   Notation "'true'" := (const_bool true) (in custom stlc at level 0).
   Notation "'false'" := (const_bool false) (in custom stlc at level 0).
   Notation "<{ e }>" := e (e custom stlc at level 99).
@@ -30,8 +30,7 @@ Module Gadgets.
   Notation "( x )" := x (in custom stlc, x at level 99).
   Notation "( x )" := x (in custom stlc_ty, x at level 99).
   Notation "x" := x (in custom stlc at level 0, x constr at level 0).
-  Notation "x" := x (in custom stlc_ty at level 0, x constr at level 0).
-  
+  Notation "x" := x (in custom stlc_ty at level 0, x constr at level 0).  
   Notation "x y" := (tm_app x y) (in custom stlc at level 1, left associativity).
   Notation "\_ : t , y" :=
     (tm_abs t y) (in custom stlc at level 90,
@@ -40,19 +39,15 @@ Module Gadgets.
                      left associativity).
   Notation "# n" := (tm_var_b n%nat) (in custom stlc at level 0).
   Notation "{ x }" := x (in custom stlc at level 1, x constr).
-
   Notation "S -> T" := (ty_arrow S T) (in custom stlc_ty at level 2, right associativity).
   Notation "Gamma '|-' t '::' T" := (typing Gamma t T) (in custom stlc_ty at level 40, t custom stlc, T custom stlc_ty at level 1).
-                                                                       
   Notation "'Field'" := ty_field (in custom stlc_ty at level 0).
   Notation "'Bool'" := ty_bool (in custom stlc_ty at level 0).
   Notation "a * b" := (ty_prod a b) (in custom stlc_ty at level 1, left associativity).
-  
   Notation "x + y" := (tm_binop x op_add y) (in custom stlc at level 2,
                                                 left associativity).
   Notation "x - y" := (tm_binop x op_sub y) (in custom stlc at level 2,
                                                 left associativity).
-
   Notation "x * y" := (tm_binop x op_mul y) (in custom stlc at level 1,
                                                 left associativity).
   Notation "x / y" := (tm_binop x op_div y) (in custom stlc at level 1,
@@ -64,20 +59,17 @@ Module Gadgets.
   Notation "x == y" := (tm_eq x y) (in custom stlc at level 3,
                                        left associativity).
   Notation "! x " := (tm_not x) (in custom stlc at level 3).
-
   Notation "'if' x 'then' y 'else' z" :=
     (tm_ifthenelse x y z) (in custom stlc at level 89,
                               x custom stlc at level 99,
                               y custom stlc at level 99,
                               z custom stlc at level 99,
                               left associativity).
-
   Notation "'let' t1 'in' t2" :=
     (tm_let t1 t2) (in custom stlc at level 88,
                        t1 custom stlc at level 99,
                        t2 custom stlc at level 99,
                    left associativity).
-
   Notation "'{' a ',' b '}'" := (tm_pair a b) (in custom stlc at level 5, left associativity).
   Notation "'fst' a" := (tm_proj_1 a) (in custom stlc at level 5).
   Notation "'snd' a" := (tm_proj_2 a) (in custom stlc at level 5).
@@ -91,6 +83,17 @@ Module Gadgets.
       multi R x z.
 
   Notation " t '-->*' t' " := (multi step t t') (at level 40).
+
+  (** TRC with step count *)
+  Inductive multi_k {X: Type} (R: relation X) : nat -> relation X :=
+  | multi_k_refl: forall e,
+      multi_k R 0 e e
+  | multi_k_trans: forall a b c n,
+      R a b ->
+      multi_k R n b c ->
+      multi_k R (S n) a c.
+
+  Notation " t '-' k '->*' t' " := (multi_k step t t') (at level 40).
 
   Definition circuit_equiv(c: exp) (c': exp): Prop :=
     forall (n: Fp), forall (w: Fp),
@@ -106,18 +109,11 @@ Module Gadgets.
        <{ c n }> -->* <{ w }>).
   Notation "a ~= b" := (circuit_equiv_poly a b) (at level 99).
 
-  Definition div_check :=
-    <{ \_: Field,
-           (\_: Field,
-                (#0 * #1) == F1)
-     }>.
-
-
   Fixpoint normalize(e: exp) :=
     match e with
     | tm_app (tm_abs T e1) v1 =>
       open_exp_wrt_exp (normalize e1) (normalize v1)
-    | tm_abs T e => tm_abs T (normalize e)
+    | tm_abs T e => tm_abs T e
     | tm_app e1 e2 => tm_app (normalize e1) (normalize e2)
     | tm_let e1 e2 =>
       open_exp_wrt_exp (normalize e2) (normalize e1)
@@ -140,20 +136,6 @@ Module Gadgets.
     | 0%nat => e
     | S g' => normalizer (normalize e) g'
     end.
-        
-  Eval simpl in normalizer <{ div_check (fp fp_one) (fp fp_one) }> 3.
-
-  Ltac invert x := inversion x; clear x; subst.
-  Locate "-->*".
-
-  Inductive big_step_k: exp -> exp -> nat -> Prop :=
-  | big_step_refl: forall e,
-      big_step_k e e 0
-  | big_step_trans: forall a b c n,
-      step a b ->
-      big_step_k b c n ->
-      big_step_k a c (S n).
-
 
   Theorem normalize_bigstep: forall e v, e-->*v -> normalize e -->* v.
     induction 0; cbn; auto; intros.
@@ -161,8 +143,5 @@ Module Gadgets.
       + apply multi_refl.
       +
   Admitted.
- 
-
-  
-      
+       
 End Gadgets.     

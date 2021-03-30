@@ -11,33 +11,17 @@ Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinInt.
 
+From STLCZK Require Import GaloisField.
+
 Module Stlc_Fp.
-  (** Prime  *)
-  Variable p: Z.
-  Hypothesis p_prime: prime p.
-
-  Definition Fp := pK p.
-  Definition fp_one := pkI p.
-  Definition fp_zero := pkO p.
-
-  Lemma eq_field: forall (x y : Fp), {x = y} + {x <> y}.
-  Proof.
-    intros.
-    unfold Fp in *.
-    unfold pK in *.
-    destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
-    pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
-    inversion H.
-    - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
-    - right. intro. inversion H1. contradiction.
-  Qed.
+  Include GaloisField.
+  
   Hint Resolve eq_field: ott_coq_equality.
   Lemma eq_bool: forall (x y: bool), {x = y} + {x <> y}.
   Proof.
     decide equality; auto.
   Qed.
   Hint Resolve eq_bool: ott_coq_equality.
-
 
   Inductive op : Set := 
   | op_add : op
@@ -362,7 +346,7 @@ Module Stlc_Fp.
   | step_mul_const : forall (n1 n2:Fp),
       step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  (pkmul  n1   n2 ) ))
   | step_div_const : forall (n1 n2:Fp),
-      (const_field n2)  <>  (const_field  fp_zero )  ->
+      (const_field n2)  <>  (const_field  0:%p )  ->
       step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  (pkdiv  n1   n2 ) ))
   | step_eq_cog_1 : forall (e1 e2 e1':exp),
       lc_exp e2 ->
@@ -399,15 +383,14 @@ Module Stlc_Fp.
       step e2 e2' ->
       step (tm_pair e1 e2) (tm_pair e1 e2')
   | step_cast_true : 
-      step (tm_cast (tm_constant (const_bool  true ))) (tm_constant (const_field  fp_one ))
+      step (tm_cast (tm_constant (const_bool  true ))) (tm_constant (const_field  1:%p ))
   | step_cast_false : 
-      step (tm_cast (tm_constant (const_bool  false ))) (tm_constant (const_field  fp_zero ))
+      step (tm_cast (tm_constant (const_bool  false ))) (tm_constant (const_field  0:%p ))
   | step_cast_cog : forall (e e':exp),
       step e e' ->
       step (tm_cast e) (tm_cast e').
 
   (** infrastructure *)
   Hint Constructors typing step lc_exp : core.
-
 
 End Stlc_Fp. 
