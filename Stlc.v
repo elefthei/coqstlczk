@@ -13,9 +13,11 @@ Require Import Coq.ZArith.BinInt.
 
 From STLCZK Require Import GaloisField.
 
-Module Stlc_Fp.
-  Include GaloisField.
-  
+Module Stlc_Ott(Import PF: GaloisField.GaloisField).
+  Import PF.
+      
+  Definition expvar : Set := var.
+
   Hint Resolve eq_field: ott_coq_equality.
   Lemma eq_bool: forall (x y: bool), {x = y} + {x <> y}.
   Proof.
@@ -392,5 +394,69 @@ Module Stlc_Fp.
 
   (** infrastructure *)
   Hint Constructors typing step lc_exp : core.
+End Stlc_Ott. 
 
-End Stlc_Fp. 
+Module Stlc(PF: GaloisField).
+  Import PF.
+  Include Stlc_Ott PF.
+
+  Coercion tm_var_f: expvar >-> exp.
+  Coercion tm_constant: constant >-> exp.
+
+  Declare Custom Entry stlc_ty.
+  Declare Custom Entry stlc.
+  Notation "'fp' n" := (const_field n) (in custom stlc at level 0).
+  Notation "'fb' b" := (const_bool b) (in custom stlc at level 0).
+  Notation "'F0'" := (const_field 0:%p) (in custom stlc at level 0).
+  Notation "'F1'" := (const_field 1:%p) (in custom stlc at level 0).
+  Notation "'true'" := (const_bool true) (in custom stlc at level 0).
+  Notation "'false'" := (const_bool false) (in custom stlc at level 0).
+  Notation "<{ e }>" := e (e custom stlc at level 99).
+  Notation "<{{ e }}>" := e (e custom stlc_ty at level 99).
+  Notation "( x )" := x (in custom stlc, x at level 99).
+  Notation "( x )" := x (in custom stlc_ty, x at level 99).
+  Notation "x" := x (in custom stlc at level 0, x constr at level 0).
+  Notation "x" := x (in custom stlc_ty at level 0, x constr at level 0).  
+  Notation "x y" := (tm_app x y) (in custom stlc at level 1, left associativity).
+  Notation "\_ : t , y" :=
+    (tm_abs t y) (in custom stlc at level 90,
+                     t custom stlc_ty at level 99,
+                     y custom stlc at level 80,
+                     left associativity).
+  Notation "# n" := (tm_var_b n%nat) (in custom stlc at level 0).
+  Notation "{ x }" := x (in custom stlc at level 1, x constr).
+  Notation "S -> T" := (ty_arrow S T) (in custom stlc_ty at level 2, right associativity).
+  Notation "Gamma '|-' t '::' T" := (typing Gamma t T) (in custom stlc_ty at level 40, t custom stlc, T custom stlc_ty at level 1).
+  Notation "'Field'" := ty_field (in custom stlc_ty at level 0).
+  Notation "'Bool'" := ty_bool (in custom stlc_ty at level 0).
+  Notation "a * b" := (ty_prod a b) (in custom stlc_ty at level 1, left associativity).
+  Notation "x + y" := (tm_binop x op_add y) (in custom stlc at level 2,
+                                                left associativity).
+  Notation "x - y" := (tm_binop x op_sub y) (in custom stlc at level 2,
+                                                left associativity).
+  Notation "x * y" := (tm_binop x op_mul y) (in custom stlc at level 1,
+                                                left associativity).
+  Notation "x / y" := (tm_binop x op_div y) (in custom stlc at level 1,
+                                                left associativity).
+  Notation "x && y" := (tm_binop x op_and y) (in custom stlc at level 4,
+                                                 left associativity).
+  Notation "x || y" := (tm_binop x op_or y) (in custom stlc at level 4,
+                                               left associativity).
+  Notation "x == y" := (tm_eq x y) (in custom stlc at level 3,
+                                       left associativity).
+  Notation "! x " := (tm_not x) (in custom stlc at level 3).
+  Notation "'if' x 'then' y 'else' z" :=
+    (tm_ifthenelse x y z) (in custom stlc at level 89,
+                              x custom stlc at level 99,
+                              y custom stlc at level 99,
+                              z custom stlc at level 99,
+                              left associativity).
+  Notation "'let' t1 'in' t2" :=
+    (tm_let t1 t2) (in custom stlc at level 88,
+                       t1 custom stlc at level 99,
+                       t2 custom stlc at level 99,
+                   left associativity).
+  Notation "'{' a ',' b '}'" := (tm_pair a b) (in custom stlc at level 5, left associativity).
+  Notation "'fst' a" := (tm_proj_1 a) (in custom stlc at level 5).
+  Notation "'snd' a" := (tm_proj_2 a) (in custom stlc at level 5).
+End Stlc.

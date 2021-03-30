@@ -1,6 +1,6 @@
 Require Import Metalib.Metatheory.
 From STLCZK Require Import GaloisField.
-
+From STLCZK Require Import Ltac.
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.Numbers.BinNums.
 Require Import Coqprime.elliptic.GZnZ.
@@ -29,9 +29,9 @@ Require Import Coq.micromega.Lia.
       And (e: exp) -> e_check: R1CS and proof proof_e: e ~ e_check.
  *)
 
-Module R1CS.
-  Include GaloisField.
-  
+Module R1CS(PF: GaloisField).
+  Import PF.
+
   Inductive Term: Set :=
   | Input (n: nat)
   | Var (w: nat)
@@ -80,9 +80,9 @@ Module R1CS.
    
 End R1CS.
 
-Module R1CSdep.
-  Include GaloisField.
-
+Module R1CSdep(PF: GaloisField).
+  Import PF.
+  
   Definition Vfp := Vector.t Fp.
   
   Inductive term: nat -> nat -> Set :=
@@ -210,7 +210,7 @@ Module R1CSdep.
     exact (pksub (pkmul SumA SumB) SumC). (** A*B - C *)
   Defined.
 
-  Fixpoint eval{n i v i' v'}
+  Fixpoint eval_fix{n i v i' v'}
            (r: @r1cs n i v)
            (inputs: Vfp i')
            (vars: Vfp v'): i <= i' -> v <= v' -> Vfp n.
@@ -223,9 +223,20 @@ Module R1CSdep.
       pose proof (Nat.max_lub_l _ _ _ H).
       pose proof (Nat.max_lub_r _ _ _ H0).
       pose proof (Nat.max_lub_l _ _ _ H0).         
-      pose proof (eval _ _ _ _ _ H2 inputs vars H3 H5) as Hprev.
+      pose proof (eval_fix _ _ _ _ _ H2 inputs vars H3 H5) as Hprev.
       pose proof (eval_constraint H1 inputs vars H4 H6) as CtrEval.
       exact (Vector.cons Fp CtrEval n0 Hprev).
   Defined.
-      
+
+  Definition eval{n i v i' v'}
+             (r: @r1cs n i v)(inputs: Vfp i')(vars: Vfp v')
+             {Hi: i <= i'} {Hv: v <= v'} :=
+    @eval_fix n i v i' v' r inputs vars Hi Hv.
+  
+  Definition correct{n i v i' v'}
+             (r: @r1cs n i v)(inputs: Vfp i')(vars: Vfp v')
+             {Hi: i <= i'}{Hv: v <= v'}: Prop :=
+    let values := @eval n i v i' v' r inputs vars Hi Hv in
+    Vector.Forall (fun v => v = 0:%p) values.
+  
 End R1CSdep.

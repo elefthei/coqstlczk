@@ -27,6 +27,79 @@ Module DivGadget.
                 (#0 * #1) == F1)
      }>.
 
+  Lemma eq_field: forall (x y : Fp), {x = y} + {x <> y}.
+  Proof.
+    intros.
+    unfold Fp in *.
+    unfold pK in *.
+    destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
+    pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
+    inversion H.
+    - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
+    - right. intro. inversion H1. contradiction.
+  Qed.
+
+  Lemma fp_mul_inv: forall n, n <> 0:%p -> pkmul (pkdiv 1:%p n) n = 1:%p.
+  Proof.
+    intros.
+    pose proof (pKfth p_prime) as FT.
+    invert FT.
+    rewrite Fdiv_def.
+    invert F_R.
+    rewrite <- Rmul_assoc.
+    rewrite Finv_l.
+    rewrite Rmul_1_l.
+    reflexivity.
+    assumption.
+  Qed.
+
+  Lemma fp_mul_div : forall n w, n <> 0:%p->
+                            pkdiv (pkmul w n) n = w.
+  Proof.
+    intros.
+    pose proof (pKfth p_prime) as FT.
+    invert FT.
+    rewrite Fdiv_def.
+    invert F_R.
+    rewrite <- Rmul_assoc.
+    apply Finv_l in H.
+    replace (pkmul n (pkinv n)) with (pkmul (pkinv n) n) by (apply Rmul_comm).
+    rewrite H.
+    rewrite <- Rmul_comm.
+    rewrite Rmul_1_l.
+    reflexivity.
+  Qed.
+
+  Lemma fp_mul_zero_l: forall w, (pkmul w 0:%p) = 0:%p.
+  Proof.
+    intros.
+    cbn.
+    apply GZnZ.zirr.
+    
+    rewrite Zmult_comm.
+    pose proof (p_prime).
+    invert H.
+    rewrite Z.mod_0_l.
+    cbn.
+    reflexivity.    
+    intro Hcontra.    
+    rewrite Hcontra in H0.
+    invert H0.
+  Qed.
+
+  Lemma mod_0_neq_1: 0 mod p <> 1 mod p.
+  Proof.
+    destruct (p_prime).
+    rewrite Z.mod_0_l.
+    rewrite Z.mod_1_l.
+    intro.
+    invert H1.
+    assumption.
+    intro.
+    rewrite H1 in H.
+    invert H.
+  Qed.
+
   Compute normalize_all <{ div_check fp_one fp_one }>.
   Lemma neq_stlc_fp: forall n w, <{ fp n }> <> <{ fp w }> <-> n <> w.
   Proof.
