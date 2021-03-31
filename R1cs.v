@@ -28,59 +28,7 @@ Require Import Coq.micromega.Lia.
             }
       And (e: exp) -> e_check: R1CS and proof proof_e: e ~ e_check.
  *)
-
 Module R1CS(PF: GaloisField).
-  Import PF.
-
-  Inductive Term: Set :=
-  | Input (n: nat)
-  | Var (w: nat)
-  | Ones.
-
-  Record Constraint :=
-    mkConstraint {
-        a: list (Fp * Term);
-        b: list (Fp * Term);
-        c: list (Fp * Term);
-      }.
-
-  Definition R1cs := list Constraint.
-
-  Declare Custom Entry r1cs.
-
-  Notation "<[ e ]>" := e (e custom r1cs at level 90).
-  Notation "z 'i[' n ']'" :=
-    (to_p z, Input n%nat)
-      (in custom r1cs at level 2,
-          n constr at level 0,
-          z constr at level 0).
-  Notation "z 'v[' n ']'" :=
-    (to_p z, Var n%nat)
-      (in custom r1cs at level 2,
-          n constr at level 0,
-          z constr at level 0).
-  Notation "{ x }" := x (in custom r1cs, x constr).
-  Notation "( a1 + .. + a2 )" :=
-    (cons a1 .. (cons a2 nil) ..)
-      (in custom r1cs at level 4,
-          a1 custom r1cs at level 2,
-          a2 custom r1cs at level 2,
-          left associativity).
-  Notation "# a * b == c" :=
-    (mkConstraint a b c)
-      (in custom r1cs at level 90,
-          a custom r1cs at level 4,
-          b custom r1cs at level 4,
-          c custom r1cs at level 4,
-          left associativity).
-
-  Definition bar := <[ 3v[3] ]>.
-  Fail Definition foo :=
-    <[ # (3i[3] + 3i[4]) * (3i[3]) == (1i[1]) ]>.
-   
-End R1CS.
-
-Module R1CSdep(PF: GaloisField).
   Import PF.
   
   Definition Vfp := Vector.t Fp.
@@ -138,6 +86,10 @@ Module R1CSdep(PF: GaloisField).
       (in custom r1cs at level 2,
           n constr at level 0,
           z constr at level 0).
+  Notation "z 1" :=
+    (to_p z, one)
+      (in custom r1cs at level 2,
+          z constr at level 0).
   Notation "{ x }" := x (in custom r1cs, x constr).
   Notation "( a )" :=
     (ahead a) (in custom r1cs at level 4, a custom r1cs at level 2).
@@ -157,8 +109,7 @@ Module R1CSdep(PF: GaloisField).
           c custom r1cs at level 4,
           left associativity).
 
-  Definition foo :=
-    <[ # (3i[3] + 3i[4]) * ( 3i[3] ) == (1i[1]) ]>.
+  Coercion rhead: constraint >-> r1cs.
 
   Lemma le_lt_Sn_m: forall n m, S n <= m -> n < m. lia. Qed.
   
@@ -188,6 +139,7 @@ Module R1CSdep(PF: GaloisField).
       + exact (pkplus (Hprev H3 H4) H1).
   Defined.
 
+  Print eval_additions.
   Fixpoint eval_constraint{i v i' v'}
            (ctr: @constraint i v)
            (inputs: Vfp i')
@@ -233,10 +185,13 @@ Module R1CSdep(PF: GaloisField).
              {Hi: i <= i'} {Hv: v <= v'} :=
     @eval_fix n i v i' v' r inputs vars Hi Hv.
   
-  Definition correct{n i v i' v'}
+  Definition correct_lt{n i v i' v'}
              (r: @r1cs n i v)(inputs: Vfp i')(vars: Vfp v')
              {Hi: i <= i'}{Hv: v <= v'}: Prop :=
     let values := @eval n i v i' v' r inputs vars Hi Hv in
     Vector.Forall (fun v => v = 0:%p) values.
-  
-End R1CSdep.
+
+  Definition correct{n i v}(r: @r1cs n i v)(inputs: Vfp i)(vars: Vfp v): Prop :=
+    @correct_lt n i v i v r inputs vars (Nat.le_refl i)(Nat.le_refl v).
+             
+End R1CS.

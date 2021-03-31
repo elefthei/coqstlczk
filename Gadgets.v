@@ -14,11 +14,9 @@ Require Import Coq.ZArith.BinInt.
 Require Import ExtLib.Data.Monads.StateMonad.
 Require Import ExtLib.Structures.Monads.
 
-Require Export FMapAVL.
-
 Module Gadget(PF: GaloisField).
   Import PF.
-  Include R1CSdep PF.
+  Include R1CS PF.
   Include Stlc PF.
 
   (** TR closure *)
@@ -83,46 +81,55 @@ Module Gadget(PF: GaloisField).
     end.
 
   (** Evaluate closures *)
-  Definition closure(e: exp)(args: exp): Prop :=
+  (**
+  Inductive first_order_type: typ -> Prop :=
+  | fo_field: first_order_type <{{ Field }}>
+  | fo_pair: forall a b,
+      first_order_type a ->
+      first_order_type b ->
+      first_order_type <{{ a * b }}>.
+                       
+  Definition fo_closure(e: exp)(args: exp): Prop :=
     forall A: typ,
+      first_order_type A ->
     <{{ nil |- args :: A }}> ->
     <{{ nil |- e :: (A -> Field) }}>.
 
-  (** Normalize with state of binder assignments *)  
-  Module M := FMapAVL.Make(Nat_as_OT).
-  (** Maps *)
-  Definition Map := M.t.  
+  (** Don't need the state monad yet *)
   Record EvalState :=
     mkEvalState {
-        inputs: M.t Fp;
-        vars: M.t Fp
+        vars: list Fp
       }.
 
   Import MonadNotation.
   Variable m : Type -> Type.
-
+  
   Fixpoint eval_closure
              (e: exp)
              (args: exp)
-             {Hc: closure e args}
+             {Hc: fo_closure e args}
              {MM: Monad m}
              {MS: MonadState EvalState m} : m exp.
   Admitted.
-
-  Fixpoint maximum_key {A} (m: M.t A): nat.
-  Admitted.
+   *)
   
-  Fail Definition of_map {A} (m : M.t A) : t A (maximum_key m).
-    
-  Definition r1cs_equiv{n i v}(e: exp)(r: @r1cs n i v): Prop :=
-    forall args,
-      closure e args ->
-      execState (eval_closure e args)
-  Theorem normalize_bigstep: forall e v, e-->*v -> normalize e -->* v.
-    induction 0; cbn; auto; intros.
-    - invert H; cbn.
-      + apply multi_refl.
-      +
-  Admitted.
-       
-End Gadgets.     
+  Fixpoint input_to_exp_aux{n}(v: Vfp n)(h: Fp): exp :=
+    match v with
+    | Vector.nil _ => <{ fp h }>
+    | Vector.cons _ b _ vs => tm_pair <{ fp h }> (input_to_exp_aux vs b)      
+    end.
+
+  Definition input_to_exp{n}(v: Vfp (S n)): exp :=
+    @Vector.caseS _ (fun n v => exp) (fun h n t => input_to_exp_aux t h) _ v.
+
+  Definition foov := Vector.of_list (cons 1:%p (cons 2:%p (cons 6:%p nil))).
+  
+  Eval cbn in input_to_exp foov.
+
+  Definition r1cs_equiv{n i v}(e: exp)(cs: @r1cs n (S i) v): Prop :=
+    forall (inputs: Vfp (S i))(vars: Vfp v)(result: Fp),
+      let args := input_to_exp inputs in
+      <{ e args }> -->* <{ fp result }> <-> correct cs inputs vars.
+
+  Notation "e <=*=> r" := (r1cs_equiv e r) (at level 50).
+End Gadget.     

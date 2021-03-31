@@ -3,6 +3,7 @@ From STLCZK Require Import Stlc.
 From STLCZK Require Import Gadgets.
 From STLCZK Require Import R1cs.
 From STLCZK Require Import GaloisField.
+From STLCZK Require Import Ltac.
 
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.Numbers.BinNums.
@@ -12,16 +13,16 @@ Require Import Coq.ZArith.BinIntDef.
 Import Z.
 Require Import Coq.ZArith.BinInt.
 
-Module DivGadget.
-  Include GaloisField.
-  Include Gadgets.
-  Include R1csDep.
+Module DivGadget(PF: GaloisField).
+  Import PF.
+  Include Gadget PF.
+
   (** Example 1: Division *)
   Definition div :=
     <{ \_: Field, (F1 / #0) }>.
 
   Locate "*".
-  Definition div_check :=
+  Definition div_fp_check :=
     <{ \_: Field,
            (\_: Field,
                 (#0 * #1) == F1)
@@ -100,7 +101,6 @@ Module DivGadget.
     invert H.
   Qed.
 
-  Compute normalize_all <{ div_check fp_one fp_one }>.
   Lemma neq_stlc_fp: forall n w, <{ fp n }> <> <{ fp w }> <-> n <> w.
   Proof.
     intro n.
@@ -135,12 +135,12 @@ Module DivGadget.
            end.
 
   (** First equivalence proof, monomorphic to Field *)
-  Theorem div_gadget_equiv: div ~~ div_check.
+  Theorem div_gadget_equiv: div ~~ div_fp_check.
   Proof.
-    unfold circuit_equiv, div, div_check.
+    unfold circuit_equiv, div, div_fp_check.
     intros n w.
     split; intro H; solve_stlc.
-    - destruct (eq_field n fp_zero); solve_stlc.
+    - destruct (eq_field n 0:%p); solve_stlc.
       (* n = 0 *)
       subst.
       rewrite fp_mul_zero_l in H9.
@@ -168,12 +168,47 @@ Module DivGadget.
       apply multi_refl.
   Qed.
 
-  (** Second equivalence proof polymorphic *)
-  Theorem div_equiv_poly:
-      div ~= div_check.
+  Definition div_check :=
+    <[ # (1i[0]) * (1v[0]) == (1 1) ]>.
+
+  (** Try an example! *)
+  Definition inp  := Vector.cons _ 1:%p _ (Vector.nil _).
+  Definition vars := Vector.cons _ 1:%p _ (Vector.nil _).
+  Eval cbn in eval div_check inp vars.
+  Lemma cor: correct div_check inp vars.
   Proof.
-    unfold circuit_equiv_poly, div, div_check.
-    intros n w T Tc Tc'.
+    unfold correct, correct_lt, inp, vars.
+    cbn.
+    constructor.
+    - unfold pksub, pkmul.
+      pose proof (Z.mod_1_l).
+      pose proof (p_prime).
+      invert H0.
+      apply H in H1.
+      unfold GZnZ.sub, GZnZ.mul.    
+      cbn.
+      rewrite H1.
+      cbn.
+      rewrite H1.
+      cbn.
+      rewrite H1.
+      cbn.
+      reflexivity.
+    - constructor.
+  Qed.
+
+  (** Second equivalence proof over r1cs *)
+  Theorem div_equiv_r1cs:
+      div <=*=> div_check.
+  Proof.
+    unfold div_check, r1cs_equiv, div, div_check, correct, correct_lt.
+    intros.
+    cbn in vars.
+    split; intro H.
+    + invert H.
+      
+      
+      cbn.
     invert Tc.
     invert Tc'.
     invert H2.
