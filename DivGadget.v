@@ -12,21 +12,25 @@ Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinIntDef.
 Import Z.
 Require Import Coq.ZArith.BinInt.
+Require Import Coq.Vectors.VectorDef.
 
 Module DivGadget(PF: GaloisField).
   Import PF.
   Include Gadget PF.
+  Import VectorNotations.
 
   (** Example 1: Division *)
   Definition div :=
     <{ \_: Field, (F1 / #0) }>.
 
-  Locate "*".
   Definition div_fp_check :=
     <{ \_: Field,
            (\_: Field,
                 (#0 * #1) == F1)
      }>.
+
+  Definition div_check :=
+    <[ { (1i[0]) * (1o[0]) == ([1]) } ]>.
 
   Lemma eq_field: forall (x y : Fp), {x = y} + {x <> y}.
   Proof.
@@ -168,16 +172,11 @@ Module DivGadget(PF: GaloisField).
       apply multi_refl.
   Qed.
 
-  Definition div_check :=
-    <[ # (1i[0]) * (1v[0]) == (1 1) ]>.
 
   (** Try an example! *)
-  Definition inp  := Vector.cons _ 1:%p _ (Vector.nil _).
-  Definition vars := Vector.cons _ 1:%p _ (Vector.nil _).
-  Eval cbn in eval div_check inp vars.
-  Lemma cor: correct div_check inp vars.
+  Lemma div_check_ex1: correct div_check [1:%p] [1:%p] []. 
   Proof.
-    unfold correct, correct_lt, inp, vars.
+    unfold correct, correct_lt.
     cbn.
     constructor.
     - unfold pksub, pkmul.
@@ -196,28 +195,47 @@ Module DivGadget(PF: GaloisField).
       reflexivity.
     - constructor.
   Qed.
+ 
 
+  Import VectorNotations.
   (** Second equivalence proof over r1cs *)
   Theorem div_equiv_r1cs:
       div <=*=> div_check.
   Proof.
     unfold div_check, r1cs_equiv, div, div_check, correct, correct_lt.
     intros.
-    cbn in vars.
-    split; intro H.
-    + invert H.
-      
-      
+    cbn in vars.  
+    unfold vec_to_exp.
+    unfold Vfp in *.
+    (** Need to get inputs: Vector.t Fp 1 => [ p: Fp ] *)
+    inversion inputs as [tsinp|inp].
+    inversion vars as [tsvar|var].
+    inversion outputs as [tsout|out].
+    subst.
+    replace inputs with [inp].
+    replace vars with ([]:Vfp 0).
+    replace outputs with [out].
+    cbn.    
+    split; intro Hprem.    
+    - (** evaluate the r1cs term *)
+      constructor.
+      unfold pksub, pkmul.
+      pose proof (Z.mod_1_l).
+      destruct (p_prime).
+      apply H0 in H2.
+      unfold GZnZ.sub, GZnZ.mul.
+      destruct inp, out.
       cbn.
-    invert Tc.
-    invert Tc'.
-    invert H2.
-    invert H3.
-    cbn in H1.
-    invert H5.
-    cbn in H2.
-    
-    split; intros; solve_stlc.
+      rewrite H2.      
+      repeat rewrite Z.mul_1_l.
+      repeat rewrite <- Zdiv.Zmult_mod.
+      apply zirr.
+      cbn.
+      
+      (** evaluate the lambda term *)
+      solve_stlc.
+      invert H12.
+
   Admitted.
 
 End DivGadgets.     

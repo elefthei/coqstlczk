@@ -6,12 +6,11 @@ Require Import Ott.ott_list_core.
 
 (** For F_p *)
 Require Import Coqprime.elliptic.ZEll.
-Require Import Coq.ZArith.Znumtheory.
-Require Import Coq.ZArith.BinInt.
-Require Import Coq.ZArith.BinIntDef.
-Import Z.
+Require Import Coq.micromega.Lia.
 
 Ltac invert H := inversion H; subst; clear H.
 Ltac invert_log_solved H g := 
   solve [inversion H; fail; idtac "solved"] || invert H.
 
+(** Nat *)
+Lemma le_lt_Sn_m: forall (n m: nat), S n <= m -> n < m. lia. Qed.

@@ -11,14 +11,12 @@ Require Import Coq.ZArith.BinIntDef.
 Import Z.
 Require Import Coq.ZArith.BinInt.
 
-Require Import ExtLib.Data.Monads.StateMonad.
-Require Import ExtLib.Structures.Monads.
 
 Module Gadget(PF: GaloisField).
   Import PF.
   Include R1CS PF.
   Include Stlc PF.
-
+  
   (** TR closure *)
   Inductive multi {X : Type} (R : relation X) : relation X :=
   | multi_refl : forall (x : X), multi R x x
@@ -112,24 +110,28 @@ Module Gadget(PF: GaloisField).
              {MS: MonadState EvalState m} : m exp.
   Admitted.
    *)
-  
-  Fixpoint input_to_exp_aux{n}(v: Vfp n)(h: Fp): exp :=
+
+  Require Import Coq.Vectors.VectorDef.
+  Import VectorNotations.
+
+  Fixpoint vec_to_exp_aux{n}(v: Vfp n)(h: Fp): exp :=
     match v with
-    | Vector.nil _ => <{ fp h }>
-    | Vector.cons _ b _ vs => tm_pair <{ fp h }> (input_to_exp_aux vs b)      
+    | [] => <{ fp h }>
+    | b :: vs => tm_pair <{ fp h }> (vec_to_exp_aux vs b)      
     end.
 
-  Definition input_to_exp{n}(v: Vfp (S n)): exp :=
-    @Vector.caseS _ (fun n v => exp) (fun h n t => input_to_exp_aux t h) _ v.
+  Definition vec_to_exp{n}(v: Vfp (S n)): exp :=
+    @Vector.caseS _ (fun n v => exp) (fun h n t => vec_to_exp_aux t h) _ v.
 
-  Definition foov := Vector.of_list (cons 1:%p (cons 2:%p (cons 6:%p nil))).
-  
-  Eval cbn in input_to_exp foov.
+  (** Example *)
+  Eval cbn in vec_to_exp [1:%p; 2:%p; 6:%p].  
 
-  Definition r1cs_equiv{n i v}(e: exp)(cs: @r1cs n (S i) v): Prop :=
-    forall (inputs: Vfp (S i))(vars: Vfp v)(result: Fp),
-      let args := input_to_exp inputs in
-      <{ e args }> -->* <{ fp result }> <-> correct cs inputs vars.
+  Definition r1cs_equiv{n i o v}(e: exp)(cs: @r1cs n (S i) (S o) v): Prop :=
+    forall (inputs: Vfp (S i))(outputs: Vfp (S o))(vars: Vfp v),
+      let args := vec_to_exp inputs in
+      let results := vec_to_exp outputs in
+      <{ e args }> -->* <{ results }> <-> correct cs inputs outputs vars.
 
   Notation "e <=*=> r" := (r1cs_equiv e r) (at level 50).
+
 End Gadget.     
