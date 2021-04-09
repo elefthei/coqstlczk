@@ -405,6 +405,7 @@ Module Stlc(PF: GaloisField).
 
   Declare Custom Entry stlc_ty.
   Declare Custom Entry stlc.
+  
   Notation "'fp' n" := (const_field n) (in custom stlc at level 0).
   Notation "'fb' b" := (const_bool b) (in custom stlc at level 0).
   Notation "'F0'" := (const_field 0:%p) (in custom stlc at level 0).
@@ -445,6 +446,7 @@ Module Stlc(PF: GaloisField).
   Notation "x == y" := (tm_eq x y) (in custom stlc at level 3,
                                        left associativity).
   Notation "! x " := (tm_not x) (in custom stlc at level 3).
+  Notation "'cast' x" := (tm_cast x) (in custom stlc at level 4).
   Notation "'if' x 'then' y 'else' z" :=
     (tm_ifthenelse x y z) (in custom stlc at level 89,
                               x custom stlc at level 99,

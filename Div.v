@@ -32,18 +32,6 @@ Module DivGadget(PF: GaloisField).
   Definition div_check :=
     <[ { (1i[0]) * (1o[0]) == ([1]) } ]>.
 
-  Lemma eq_field: forall (x y : Fp), {x = y} + {x <> y}.
-  Proof.
-    intros.
-    unfold Fp in *.
-    unfold pK in *.
-    destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
-    pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
-    inversion H.
-    - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
-    - right. intro. inversion H1. contradiction.
-  Qed.
-
   Lemma fp_mul_inv: forall n, n <> 0:%p -> pkmul (pkdiv 1:%p n) n = 1:%p.
   Proof.
     intros.
@@ -80,7 +68,6 @@ Module DivGadget(PF: GaloisField).
     intros.
     cbn.
     apply GZnZ.zirr.
-    
     rewrite Zmult_comm.
     pose proof (p_prime).
     invert H.
@@ -238,4 +225,4 @@ Module DivGadget(PF: GaloisField).
 
   Admitted.
 
-End DivGadgets.     
+End DivGadget.     

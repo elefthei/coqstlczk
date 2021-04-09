@@ -7,6 +7,8 @@ Require Import Ott.ott_list_core.
 (** For F_p *)
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.micromega.Lia.
+Require Import Coq.Vectors.VectorDef.
+Import VectorNotations.
 
 Ltac invert H := inversion H; subst; clear H.
 Ltac invert_log_solved H g := 
@@ -14,3 +16,42 @@ Ltac invert_log_solved H g :=
 
 (** Nat *)
 Lemma le_lt_Sn_m: forall (n m: nat), S n <= m -> n < m. lia. Qed.
+
+Require Import Coq.ZArith.BinIntDef.
+Import Z.
+Require Import Coq.ZArith.BinInt.
+
+Lemma gt_relax: forall (m n: Z), m > Z.succ n -> m > n. lia. Qed.
+
+Lemma vec1_proj {T} : forall (v:Vector.t T 1), exists a, v = [a].
+  intros.
+  rewrite (VectorSpec.eta v).
+  exists (hd v).
+  apply f_equal.
+  apply (case0 (fun x => x=[])).
+  reflexivity.
+Qed.
+
+Lemma vec2_proj {T} : forall (v:Vector.t T 2), exists a b, v = [a; b].
+  intros.
+  rewrite (VectorSpec.eta v).
+  rewrite (VectorSpec.eta (tl v)).
+  exists (hd v), (hd (tl v)).
+  apply f_equal.
+  apply f_equal.
+  apply (case0 (fun x => x=[])).
+  reflexivity.
+Qed.
+
+Lemma vec3_proj {T} : forall (v:Vector.t T 3), exists a b c, v = [a; b; c].
+  intros.
+  rewrite (VectorSpec.eta v).
+  rewrite (VectorSpec.eta (tl v)).
+  rewrite (VectorSpec.eta (tl (tl v))).
+  exists (hd v), (hd (tl v)), (hd (tl (tl v))).
+  apply f_equal.
+  apply f_equal.
+  apply f_equal.    
+  apply (case0 (fun x => x=[])).
+  reflexivity.
+Qed.
