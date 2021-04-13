@@ -8,17 +8,38 @@ Require Import Ott.ott_list_core.
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinInt.
+Require Import Coqprime.elliptic.GZnZ.
 Require Import Coq.ZArith.BinIntDef.
 Import Z.
-  
+From Coq Require Import Ring.
+From Coq Require Import Field.
+
+From STLCZK Require Import Ltac.
+
 Module Type GaloisField.
   (** Prime  *)
   Parameter p: Z.
   Parameter p_prime: prime p.
 
-  Definition Fp := pK p.
+  Definition Fp: Set := pK p.
   Definition to_p x:Fp := GZnZ.mkznz _ _ (GZnZ.modz _  x).
   Notation "x :%p" := (to_p x) (at level 1).
+
+  Definition p_gt0 : 0 < p.
+  Proof.
+    pose proof (p_prime).
+    inversion H.
+    apply Z.lt_gt in H0.
+    apply Z.gt_lt.
+    apply gt_relax.
+    cbn.
+    exact H0.
+  Defined.
+
+  Definition FTH := pKfth p_prime.
+  Definition RTH := RZnZ _ p_gt0.    
+  Add Ring RTH: RTH.
+  Add Field FTH: FTH.
   
   Lemma eq_field: forall (x y : Fp), {x = y} + {x <> y}.
   Proof.

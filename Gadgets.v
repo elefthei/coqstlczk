@@ -34,7 +34,7 @@ Module Gadget(PF: GaloisField).
       R a b ->
       multi_k R n b c ->
       multi_k R (S n) a c.
-  Notation " t '-' k '->*' t' " := (multi_k step k t t') (at level 40).
+  Notation " t '==>*' k t' " := (multi_k step k t t') (at level 40).
 
   Definition circuit_equiv(c: exp) (c': exp): Prop :=
     forall (n: Fp), forall (w: Fp),

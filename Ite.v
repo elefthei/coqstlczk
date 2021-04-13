@@ -14,23 +14,45 @@ Import Z.
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Vectors.VectorDef.
 
+From Coq Require Import Ring.
+From Coq Require Import Field.
+
+Module Foo.
+  From Coq Require Import Ring.
+  Open Scope bool_scope.
+
+  Lemma boolSRth : semi_ring_theory false true orb andb (@eq bool).
+  Proof.
+    constructor.
+    exact Bool.orb_false_l.
+    exact Bool.orb_comm.
+    exact Bool.orb_assoc.
+    exact Bool.andb_true_l.
+    exact Bool.andb_false_l.
+    exact Bool.andb_comm.
+    exact Bool.andb_assoc.
+    exact Bool.andb_orb_distrib_l.
+  Qed.
+
+  Add Ring boolsr : boolSRth.
+
+  Lemma ors a b : a || b = b || a.
+  Proof. ring. Qed.
+End Foo.
+
 Module IteGadget(PF: GaloisField).
   Import PF.
   Include Gadget PF.
   Import VectorNotations.
 
-  
   (** Example 1: Division *)
-  Check tm_cast.
   Definition ite :=
-    <{ \_: Field,
-           \_: Field,
-               \_: Field,
-                   if cast #0 then #1 else #2
+    <{ \_: Field * Field * Field,
+           if to_bool (fst #0) then fst (snd #0) else snd (snd #0)
      }>. 
 
   Definition ite_check :=
-    <[ { (1i[0]) * (1i[2] + -1i[1]) == (1o[0] + -1i[0]) } ]>.
+    <[ { (1i[0]) * (1i[2] + -1i[1]) == (1o[0] + -1i[1]) } ]>.
 
   Ltac solve_stlc :=
     repeat match goal with
@@ -59,16 +81,101 @@ Module IteGadget(PF: GaloisField).
     reflexivity.
   Qed.
 
-   Ltac exists_inverter :=
+  Ltac exists_inverter :=
     repeat match goal with
            | [H': exists a, _ |- _] => inversion H' as [?a ?H2]; clear H'        
-    end.
-  
+           end.
+
+   Ltac beta :=
+     eapply step_beta;
+     solve [
+         econstructor
+         | repeat match goal with
+                | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+                  idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+                | [ |- lc_exp <{ \_ : _, _ }> ] =>
+                  idtac "empty binders"; apply (lc_tm_abs empty); intros
+                  end
+         | repeat econstructor]; repeat econstructor.
+
+   Print ring_theory.
+   Print PF.FTH.
+   Definition RTH: ring_theory Fp _ _ _ _ _ _
+     
+   Add Ring fpr: FTH.
+   Lemma Ropp_pkmul: forall (a: Fp),
+       pkopp a = pkmul (-1):%p a.
+   Proof.
+     intros.
+     ring.
+     ring_simplify.
+     ring Fp.
+     unfold pkopp, GZnZ.opp, pkmul, GZnZ.mul.
+     cbn.
+     destruct a.
+     cbn.
+     apply zirr.
+     rewrite Zdiv.Zmult_mod_idemp_l.
+     replace (-1 * val) with (-val) by lia.
+     reflexivity.
+   Qed.
+   
+   Check zirr.
+   Require Import Coq.micromega.Lra.
+   Require Import Ring.
+
+   Definition fp_ring := ring_theory fp0 fp1 fpplus fpmul fpsub.
+   Check fp_ring.
+   Print ring_theory.
+   Definition fp_ring_theory: ring_theory.
+     
+   Add Ring Fp: (ring_theory fp0 fp1 fpplus fpmul
+                             fpsub (pkopp (p:=p)) eq).
+
+   Lemma Rplus_opp: forall a b,
+       pkopp (pkplus b a) = pkplus (pkopp b) (@pkopp p a).
+   Proof.
+     intros.
+     pose proof (pKfth p_prime) as HpK.
+     invert HpK.
+     Add Ring Fp: (ring_theory (pkO p) (pkI p) (pkplus (p:=p)) (pkmul (p:=p)) 
+                               (pksub (p:=p)) (pkopp (p:=p)) eq).
+
+     pkplus pkmul pkI (pkO p) (pkopp (p:=p)) eq. [ c1 ...cn ].
+     Add Ring Fp: F_R.
+     Search zify.
+     ring
+     invert F_R.
+   
+     unfold pkopp, GZnZ.opp.
+     apply zirr.
+     cbn.
+     
+     rewrite <- Zdiv.Zplus_mod.
+     rewrite <- Z.sub_0_l.     
+     rewrite Zdiv.Zminus_mod_idemp_r.
+     rewrite Z.sub_0_l.
+     rewrite Z.opp_add_distr.
+     reflexivity.
+   Qed.
+
+   
+   Lemma Rsub_add_distr: forall a b c,
+       pksub (pkplus b c) (pkplus b a) = @pksub p c a.
+   Proof.
+     intros.
+     pose proof (pKfth p_prime) as HpK.
+     invert HpK.
+     invert F_R.
+     do 2 rewrite Rsub_def.
+     rewrite <- Radd_assoc.
+     rewr
+   
    (** Second equivalence proof over r1cs *)
   Theorem ite_equiv_r1cs:
     ite <=*=> ite_check.
   Proof.
-    unfold ite_check, r1cs_equiv, ite, correct, correct_lt.
+    unfold ite_check, r1cs_equiv, ite.
     intros.
     cbn in vars.  
     unfold vec_to_exp.
@@ -77,18 +184,89 @@ Module IteGadget(PF: GaloisField).
     pose proof (vec3_proj inputs).
     pose proof (vec1_proj outputs).
     exists_inverter.
+    subst.
+    cbn.
     pose proof (pKfth p_prime) as HpK.
     invert HpK.
     invert F_R.
     split; intro H.
     - (** evaluate the r1cs term *)
-      constructor; cbn.
-      (** evaluate the lambda term *)
+      constructor; cbn; repeat rewrite Rmul_1_l.
+      destruct (eq_field a0 1:%p) eqn:Ea0.
+      rewrite e.
+      rewrite Rmul_1_l.
+      
+      replace (pksub (pkplus (pkmul (-1) :%p b) c) (pkplus (pkmul (-1) :%p b) a)) with
+          (pksub (
+      
+      (** evaluate the lambda term *)      
+      cbn in H.
       solve_stlc.
+      repeat rewrite Rmul_1_l.
+      replace (pkmul (-1):%p 1:%p) with (pkmul 1:%p (-1):%p) by (apply Rmul_comm).
+      rewrite Rmul_1_l.
+      rewrite Rsub_def.
+      
+      do 3 rewrite Rmul_comm.
+      rewrite Rmul_comm.
+      (** solve_stlc. *)
+      invert H.      
+      invert H0.
+      invert H5.
+      invert H6.
+      invert H7.
+      invert H7.
+      invert H8.
+      invert H8.
+      cbn in H1.
+
+      (** After beta *)
+      invert H1.
+      invert H.
+      invert H10.
+      invert H1.
+      invert H0. invert H. invert H14. invert H1. invert H. invert H16.
+      invert H0. invert H. invert H2. invert H1. invert H. invert H0.
+      
+        invert H0. invert H. invert H2.
+      solve_stlc.
+      
       constructor.
     - cbn in H.
       invert H.
+      cbn.
+      econstructor.
+      beta.
+      cbn.
+      econstructor.
+      apply step_if_cog; repeat econstructor.
+      app
+      destruct (eq_bool <{ cast fp a0 }>).
+      econstructor.
+      econstructor.
       
+      apply multi_step with
+          (y:=              
+             <{
+               if cast (<{ fp a0 }>)
+               then <{ fp b }>
+               else <{ fp c }> }>).
+      
+                          econstructor.
+      cbn i
+      beta.
+      
+      beta.
+      
+      beta (Metatheory.add x
+        econstructor.
+        econstructor.
+        econstructor.
+      + repeat econstructor.
+      + econstructor.
+        cbn.
+      solve_stlc.
+      invert H2.
       rewrite Rmul_1_l.
       rewrite Rmul_comm.
       rewrite Finv_l.
