@@ -83,7 +83,7 @@ Module Type GaloisField.
      replace (-1 * val) with (-val) by lia.
      reflexivity.
   Qed.
-  
+
   Lemma Rmul_inv: forall n, n <> 0:%p -> pkmul (pkdiv 1:%p n) n = 1:%p.
   Proof.
     intros.
@@ -192,5 +192,35 @@ Module Type GaloisField.
      intros.   
      ring.
    Qed.
+
+        
+   Lemma Rsub_mul_1_inv:
+     forall a b, pksub (pkmul a b) 1:%p = 0:%p -> pkinv a = b.
+   Proof.
+     intros.
+     destruct (eq_field a 0:%p).
+     subst.
+     destruct (pKfth p_prime).
+     destruct F_R.
+     rewrite Rmul_comm in H.
+     rewrite Rmul_zero_l in H.
+     rewrite Rsub_def in H.
+     rewrite Radd_0_l in H.
+     apply Ropp_1_not_0 in H.
+     contradiction.
+
+     destruct a as [za], b as [zb].
+     unfold pksub, GZnZ.sub in *.
+     cbn in *.
+     invert H.
+     cbn in H1.
+     Search modulo.
+     rewrite Zdiv.Zminus_mod_idemp_l in H1.
+     rewrite Zdiv.Zminus_mod_idemp_r in H1.
+     Search modulo.
+     pose proof p_gt0 as GT.
+     apply Z.lt_gt in GT.
+     pose proof Zdiv.Z_div_exact_2 (za*zb -1) p GT H1.
+   Admitted.
 End GaloisField.
   

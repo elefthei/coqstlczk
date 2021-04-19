@@ -484,6 +484,36 @@ Module Stlc(PF: GaloisField).
   Notation "'{' a ',' b '}'" := (tm_pair a b) (in custom stlc at level 5, right associativity).
   Notation "'fst' a" := (tm_proj_1 a) (in custom stlc at level 5).
   Notation "'snd' a" := (tm_proj_2 a) (in custom stlc at level 5).
+
+  Ltac beta :=
+    eapply step_beta;
+    solve [
+        econstructor
+      | repeat match goal with
+               | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+                 idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+               | [ |- lc_exp <{ \_ : _, _ }> ] =>
+                 idtac "empty binders"; apply (lc_tm_abs empty); intros
+               end
+      | repeat econstructor]; repeat econstructor.
+  
+  (** Equality projections *)
+  Lemma eq_stlc_fp: forall n w, <{ fp n }> = <{ fp w }> <-> n = w.
+  Proof.
+    intros; split; intros; (inversion H || rewrite H); reflexivity.
+  Qed.
+
+  Lemma neq_stlc_fp: forall n w, <{ fp n }> <> <{ fp w }> <-> n <> w.
+  Proof.
+    intros.
+    split.
+    intros;intro.
+    apply eq_stlc_fp in H0.
+    contradiction.
+    intros; intro.
+    apply eq_stlc_fp in H0.
+    contradiction.
+  Qed.
 End Stlc.
 
 

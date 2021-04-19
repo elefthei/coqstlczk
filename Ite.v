@@ -18,29 +18,6 @@ From Coq Require Import Ring.
 From Coq Require Import Field.
 Require Import Coq.micromega.Lia.
 
-Module Foo.
-  From Coq Require Import Ring.
-  Open Scope bool_scope.
-
-  Lemma boolSRth : semi_ring_theory false true orb andb (@eq bool).
-  Proof.
-    constructor.
-    exact Bool.orb_false_l.
-    exact Bool.orb_comm.
-    exact Bool.orb_assoc.
-    exact Bool.andb_true_l.
-    exact Bool.andb_false_l.
-    exact Bool.andb_comm.
-    exact Bool.andb_assoc.
-    exact Bool.andb_orb_distrib_l.
-  Qed.
-
-  Add Ring boolsr : boolSRth.
-
-  Lemma ors a b : a || b = b || a.
-  Proof. ring. Qed.
-End Foo.
-
 Module IteGadget(PF: GaloisField).
   Import PF.
   Include Gadget PF.
@@ -55,53 +32,7 @@ Module IteGadget(PF: GaloisField).
   Definition ite_check :=
     <[ { (1i[0]) * (1i[2] + -1i[1]) == (1o[0] + -1i[1]) } ]>.
 
-  Ltac solve_stlc :=
-    repeat match goal with
-           | [ |- step (tm_eq ?a ?b) _ ] =>
-             apply step_eq_refl || apply step_eq_cog_1 || apply step_eq_cog_2
-           | [ |- step (tm_binop _ op_mul _) _ ] => apply step_mul_const
-           | [ |- step (tm_app ((tm_abs _ _))  _) _] => eapply step_beta
-           | [ H: step ?a ?b |- ?g ] => invert_log_solved H g
-           | [ H: ?a -->* ?b |- _ ] => inversion H; subst; clear H
-           | [ |- Is_true _ ] => idtac "is_true"; constructor
-           | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
-             idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
-           | [ |- lc_exp <{ \_ : _, _ }> ] =>
-             idtac "empty binders"; apply (lc_tm_abs empty); intros
-           | [ |- lc_exp _ ] => idtac "lc_exp"; constructor
-           | [ H: context[open_exp_wrt_exp _ _] |- _] => cbn in H
-           | [ |- context[open_exp_wrt_exp _ _] ] => cbn
-           | [ H: ?a |- ?a ] => exact H
-           | [ |- _ -->* _ ] => idtac "forward" ; econstructor; fail
-           end.
-  
-  Lemma eq_proj_fp: forall a b, <{ fp a }> = <{ fp b }> -> a = b.
-  Proof.
-    intros.
-    invert H.
-    reflexivity.
-  Qed.
-
-  Ltac exists_inverter :=
-    repeat match goal with
-           | [H': exists a, _ |- _] => inversion H' as [?a ?H2]; clear H'        
-           end.
-
-   Ltac beta :=
-     eapply step_beta;
-     solve [
-         econstructor
-         | repeat match goal with
-                | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
-                  idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
-                | [ |- lc_exp <{ \_ : _, _ }> ] =>
-                  idtac "empty binders"; apply (lc_tm_abs empty); intros
-                  end
-         | repeat econstructor]; repeat econstructor.
-
-
-
-  (** Second equivalence proof over r1cs *)
+   (** Second equivalence proof over r1cs *)
   Theorem ite_equiv_r1cs:
     ite <=*=> ite_check.
   Proof.
@@ -137,7 +68,6 @@ Module IteGadget(PF: GaloisField).
         replace (pksub a a) with (0:%p) by ring.
         reflexivity.
       + 
-      constructor.
     - cbn in H.
       invert H.
       cbn.
@@ -269,4 +199,4 @@ Module IteGadget(PF: GaloisField).
       
   Admitted.
 
-End DivGadgets.     
+End IteGadget.     

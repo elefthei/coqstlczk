@@ -55,3 +55,8 @@ Lemma vec3_proj {T} : forall (v:Vector.t T 3), exists a b c, v = [a; b; c].
   apply (case0 (fun x => x=[])).
   reflexivity.
 Qed.
+
+Ltac exists_inverter :=
+  repeat match goal with
+         | [H': exists a, _ |- _] => inversion H' as [?a ?H2]; clear H'        
+         end.

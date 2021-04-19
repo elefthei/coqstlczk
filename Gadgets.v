@@ -134,4 +134,24 @@ Module Gadget(PF: GaloisField).
 
   Notation "e <=*=> r" := (r1cs_equiv e r) (at level 50).
 
+  Ltac solve_stlc :=
+    repeat match goal with
+           | [ |- step (tm_eq ?a ?b) _ ] =>
+             apply step_eq_refl || apply step_eq_cog_1 || apply step_eq_cog_2
+           | [ |- step (tm_binop _ op_mul _) _ ] => apply step_mul_const
+           | [ |- step (tm_app ((tm_abs _ _))  _) _] => eapply step_beta
+           | [ H: step ?a ?b |- ?g ] => inversion H; subst; clear H
+           | [ H: ?a -->* ?b |- _ ] => inversion H; subst; clear H
+           | [ |- Is_true _ ] => idtac "is_true"; constructor
+           | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+             idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+           | [ |- lc_exp <{ \_ : _, _ }> ] =>
+             idtac "empty binders"; apply (lc_tm_abs empty); intros
+           | [ |- lc_exp _ ] => idtac "lc_exp"; constructor
+           | [ H: context[open_exp_wrt_exp _ _] |- _] => cbn in H
+           | [ |- context[open_exp_wrt_exp _ _] ] => cbn
+           | [ H: ?a |- ?a ] => exact H
+           | [ |- _ -->* _ ] => idtac "forward" ; econstructor; fail
+           end.
+
 End Gadget.     
