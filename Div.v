@@ -13,6 +13,7 @@ Require Import Coq.ZArith.BinIntDef.
 Import Z.
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Vectors.VectorDef.
+From Coq Require Import Field.
 
 Module DivGadget(PF: GaloisField).
   Import PF.
@@ -32,65 +33,6 @@ Module DivGadget(PF: GaloisField).
   Definition div_check :=
     <[ { (1i[0]) * (1o[0]) == ([1]) } ]>.
 
-  Lemma fp_mul_inv: forall n, n <> 0:%p -> pkmul (pkdiv 1:%p n) n = 1:%p.
-  Proof.
-    intros.
-    pose proof (pKfth p_prime) as FT.
-    invert FT.
-    rewrite Fdiv_def.
-    invert F_R.
-    rewrite <- Rmul_assoc.
-    rewrite Finv_l.
-    rewrite Rmul_1_l.
-    reflexivity.
-    assumption.
-  Qed.
-
-  Lemma fp_mul_div : forall n w, n <> 0:%p->
-                            pkdiv (pkmul w n) n = w.
-  Proof.
-    intros.
-    pose proof (pKfth p_prime) as FT.
-    invert FT.
-    rewrite Fdiv_def.
-    invert F_R.
-    rewrite <- Rmul_assoc.
-    apply Finv_l in H.
-    replace (pkmul n (pkinv n)) with (pkmul (pkinv n) n) by (apply Rmul_comm).
-    rewrite H.
-    rewrite <- Rmul_comm.
-    rewrite Rmul_1_l.
-    reflexivity.
-  Qed.
-
-  Lemma fp_mul_zero_l: forall w, (pkmul w 0:%p) = 0:%p.
-  Proof.
-    intros.
-    cbn.
-    apply GZnZ.zirr.
-    rewrite Zmult_comm.
-    pose proof (p_prime).
-    invert H.
-    rewrite Z.mod_0_l.
-    cbn.
-    reflexivity.    
-    intro Hcontra.    
-    rewrite Hcontra in H0.
-    invert H0.
-  Qed.
-
-  Lemma mod_0_neq_1: 0 mod p <> 1 mod p.
-  Proof.
-    destruct (p_prime).
-    rewrite Z.mod_0_l.
-    rewrite Z.mod_1_l.
-    intro.
-    invert H1.
-    assumption.
-    intro.
-    rewrite H1 in H.
-    invert H.
-  Qed.
 
   Lemma neq_stlc_fp: forall n w, <{ fp n }> <> <{ fp w }> <-> n <> w.
   Proof.
@@ -125,67 +67,46 @@ Module DivGadget(PF: GaloisField).
            | [ |- _ -->* _ ] => idtac "forward" ; econstructor; fail
            end.
 
-  (** First equivalence proof, monomorphic to Field *)
-  Theorem div_gadget_equiv: div ~~ div_fp_check.
-  Proof.
-    unfold circuit_equiv, div, div_fp_check.
-    intros n w.
-    split; intro H; solve_stlc.
-    - destruct (eq_field n 0:%p); solve_stlc.
-      (* n = 0 *)
-      subst.
-      rewrite fp_mul_zero_l in H9.
-      invert H9.
-      apply mod_0_neq_1 in H0.
-      contradiction.
-      (* n <> 0 *)
-      econstructor; solve_stlc.
-      econstructor.
-      apply step_div_const.
-      generalize n0.
-      apply neq_stlc_fp.
-      rewrite -> (fp_mul_div n w n0).      
-      apply multi_refl.
-    - econstructor.
-      eapply step_app_1; solve_stlc.
-      cbn.
-      econstructor; try eapply step_beta; solve_stlc.
-      econstructor; solve_stlc.      
-      econstructor.
-      rewrite fp_mul_inv.
-      eapply step_eq_refl.
-      apply neq_stlc_fp.
-      assumption.
-      apply multi_refl.
-  Qed.
+    Ltac exists_inverter :=
+    repeat match goal with
+           | [H': exists a, _ |- _] => inversion H' as [?a ?H2]; clear H'        
+           end.
 
+   Ltac beta :=
+     eapply step_beta;
+     solve [
+         econstructor
+         | repeat match goal with
+                | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+                  idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+                | [ |- lc_exp <{ \_ : _, _ }> ] =>
+                  idtac "empty binders"; apply (lc_tm_abs empty); intros
+                  end
+         | repeat econstructor]; repeat econstructor.
 
-  (** Try an example! *)
-  Lemma div_check_ex1: correct div_check [1:%p] [1:%p] []. 
-  Proof.
-    unfold correct, correct_lt.
-    cbn.
-    constructor.
-    - unfold pksub, pkmul.
-      pose proof (Z.mod_1_l).
-      pose proof (p_prime).
-      invert H0.
-      apply H in H1.
-      unfold GZnZ.sub, GZnZ.mul.    
-      cbn.
-      rewrite H1.
-      cbn.
-      rewrite H1.
-      cbn.
-      rewrite H1.
-      cbn.
-      reflexivity.
-    - constructor.
-  Qed.
- 
+     
+   Lemma Rmul_neq_0:
+     forall a b, pksub (pkmul a b) 1:%p = 0:%p -> a <> 0:%p /\ b <> 0:%p.
+   Proof.
+     intros.
+     split.
+     intro Hcontra;
+       rewrite Hcontra in H;
+       rewrite (Rmul_comm RTH) in H.
+     rewrite Rmul_zero_l in H.
+     destruct (pKfth p_prime).
+     invert F_R.
+     rewrite Rsub_def in H.
+     rewrite Radd_0_l in H.
+     
+     inversion H.
+     cbn in H.
+     invert H.
+     cbn in H1.
+     pose proof (Z.mod_mod 1 p p_neq0).
+   Admitted.
 
-  Import VectorNotations.
-  (** Second equivalence proof over r1cs *)
+   (** Second equivalence proof over r1cs *)
   Theorem div_equiv_r1cs:
       div <=*=> div_check.
   Proof.
@@ -202,27 +123,45 @@ Module DivGadget(PF: GaloisField).
     replace inputs with [inp].
     replace vars with ([]:Vfp 0).
     replace outputs with [out].
-    cbn.    
+    cbn.
+    destruct (pKfth p_prime).
+    invert F_R.
     split; intro Hprem.    
     - (** evaluate the r1cs term *)
-      constructor.
-      unfold pksub, pkmul.
-      pose proof (Z.mod_1_l).
-      destruct (p_prime).
-      apply H0 in H2.
-      unfold GZnZ.sub, GZnZ.mul.
-      destruct inp, out.
-      cbn.
-      rewrite H2.      
-      repeat rewrite Z.mul_1_l.
-      repeat rewrite <- Zdiv.Zmult_mod.
-      apply zirr.
-      cbn.
-      
+      constructor.   
+      repeat rewrite Rmul_1_l.
       (** evaluate the lambda term *)
       solve_stlc.
-      invert H12.
+      rewrite Fdiv_def.
+      rewrite Rmul_1_l.
+      rewrite neq_stlc_fp in H7.
+      rewrite Rmul_comm.
+      rewrite (Finv_l).
+      rewrite Rsub_def.
+      rewrite Ropp_def.
+      reflexivity.
+      exact H7.
+      constructor.
+    - (** evaluate the r1cs term *)
+      invert Hprem.
+      repeat rewrite Rmul_1_l in H4.
+      econstructor.
+      beta.
+      cbn.
 
+      econstructor.
+      apply step_div_const.
+      apply neq_stlc_fp.
+      intro.
+      rewrite H0 in H4.
+      rewrite Rmul_comm in H4. rewrite Rmul_zero_l in H4.
+      rewrite Rsub_def in H4.
+      rewrite Radd_0_l in H4.
+      apply  Ropp_1_not_0 in H4.
+      inversion H4.
+
+      
+      
   Admitted.
 
 End DivGadget.     

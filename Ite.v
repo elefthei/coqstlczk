@@ -16,6 +16,7 @@ Require Import Coq.Vectors.VectorDef.
 
 From Coq Require Import Ring.
 From Coq Require Import Field.
+Require Import Coq.micromega.Lia.
 
 Module Foo.
   From Coq Require Import Ring.
@@ -98,80 +99,9 @@ Module IteGadget(PF: GaloisField).
                   end
          | repeat econstructor]; repeat econstructor.
 
-   Print ring_theory.
-   Print PF.FTH.
-   Definition RTH: ring_theory Fp _ _ _ _ _ _
-     
-   Add Ring fpr: FTH.
-   Lemma Ropp_pkmul: forall (a: Fp),
-       pkopp a = pkmul (-1):%p a.
-   Proof.
-     intros.
-     ring.
-     ring_simplify.
-     ring Fp.
-     unfold pkopp, GZnZ.opp, pkmul, GZnZ.mul.
-     cbn.
-     destruct a.
-     cbn.
-     apply zirr.
-     rewrite Zdiv.Zmult_mod_idemp_l.
-     replace (-1 * val) with (-val) by lia.
-     reflexivity.
-   Qed.
-   
-   Check zirr.
-   Require Import Coq.micromega.Lra.
-   Require Import Ring.
 
-   Definition fp_ring := ring_theory fp0 fp1 fpplus fpmul fpsub.
-   Check fp_ring.
-   Print ring_theory.
-   Definition fp_ring_theory: ring_theory.
-     
-   Add Ring Fp: (ring_theory fp0 fp1 fpplus fpmul
-                             fpsub (pkopp (p:=p)) eq).
 
-   Lemma Rplus_opp: forall a b,
-       pkopp (pkplus b a) = pkplus (pkopp b) (@pkopp p a).
-   Proof.
-     intros.
-     pose proof (pKfth p_prime) as HpK.
-     invert HpK.
-     Add Ring Fp: (ring_theory (pkO p) (pkI p) (pkplus (p:=p)) (pkmul (p:=p)) 
-                               (pksub (p:=p)) (pkopp (p:=p)) eq).
-
-     pkplus pkmul pkI (pkO p) (pkopp (p:=p)) eq. [ c1 ...cn ].
-     Add Ring Fp: F_R.
-     Search zify.
-     ring
-     invert F_R.
-   
-     unfold pkopp, GZnZ.opp.
-     apply zirr.
-     cbn.
-     
-     rewrite <- Zdiv.Zplus_mod.
-     rewrite <- Z.sub_0_l.     
-     rewrite Zdiv.Zminus_mod_idemp_r.
-     rewrite Z.sub_0_l.
-     rewrite Z.opp_add_distr.
-     reflexivity.
-   Qed.
-
-   
-   Lemma Rsub_add_distr: forall a b c,
-       pksub (pkplus b c) (pkplus b a) = @pksub p c a.
-   Proof.
-     intros.
-     pose proof (pKfth p_prime) as HpK.
-     invert HpK.
-     invert F_R.
-     do 2 rewrite Rsub_def.
-     rewrite <- Radd_assoc.
-     rewr
-   
-   (** Second equivalence proof over r1cs *)
+  (** Second equivalence proof over r1cs *)
   Theorem ite_equiv_r1cs:
     ite <=*=> ite_check.
   Proof.
@@ -186,51 +116,27 @@ Module IteGadget(PF: GaloisField).
     exists_inverter.
     subst.
     cbn.
-    pose proof (pKfth p_prime) as HpK.
-    invert HpK.
+    destruct (FTH).
     invert F_R.
     split; intro H.
     - (** evaluate the r1cs term *)
-      constructor; cbn; repeat rewrite Rmul_1_l.
-      destruct (eq_field a0 1:%p) eqn:Ea0.
-      rewrite e.
-      rewrite Rmul_1_l.
-      
-      replace (pksub (pkplus (pkmul (-1) :%p b) c) (pkplus (pkmul (-1) :%p b) a)) with
-          (pksub (
-      
-      (** evaluate the lambda term *)      
-      cbn in H.
-      solve_stlc.
+      constructor; cbn.
+      ring_simplify.
       repeat rewrite Rmul_1_l.
-      replace (pkmul (-1):%p 1:%p) with (pkmul 1:%p (-1):%p) by (apply Rmul_comm).
-      rewrite Rmul_1_l.
-      rewrite Rsub_def.
-      
-      do 3 rewrite Rmul_comm.
-      rewrite Rmul_comm.
-      (** solve_stlc. *)
-      invert H.      
-      invert H0.
-      invert H5.
-      invert H6.
-      invert H7.
-      invert H7.
-      invert H8.
-      invert H8.
-      cbn in H1.
-
-      (** After beta *)
-      invert H1.
-      invert H.
-      invert H10.
-      invert H1.
-      invert H0. invert H. invert H14. invert H1. invert H. invert H16.
-      invert H0. invert H. invert H2. invert H1. invert H. invert H0.
-      
-        invert H0. invert H. invert H2.
-      solve_stlc.
-      
+      destruct (eq_field a0 1:%p) eqn:Ea0.
+      + rewrite e.
+        repeat rewrite Rmul_1_l.
+        rewrite <- Ropp_pkmul.
+        
+        rewrite Rsub_def.
+        replace (pkopp (pkopp b)) with b by ring.
+        (** ((c - b) - a) + b *)
+        replace (pkplus (pksub (pkplus c (pkopp b)) a) b) with (pksub c a) by ring.
+        solve_stlc.
+        admit.
+        replace (pksub a a) with (0:%p) by ring.
+        reflexivity.
+      + 
       constructor.
     - cbn in H.
       invert H.

@@ -10,6 +10,7 @@ Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinInt.
 Require Import Coqprime.elliptic.GZnZ.
 Require Import Coq.ZArith.BinIntDef.
+Require Import Coq.micromega.Lia.
 Import Z.
 From Coq Require Import Ring.
 From Coq Require Import Field.
@@ -36,8 +37,23 @@ Module Type GaloisField.
     exact H0.
   Defined.
 
+  Definition p_neq0: p <> 0.
+  Proof.
+    pose proof (p_gt0).    
+    intro.
+    rewrite H0 in H.
+    inversion H.
+  Qed.
+
   Definition FTH := pKfth p_prime.
-  Definition RTH := RZnZ _ p_gt0.    
+  
+  Definition RTH: ring_theory (0:%p) (1:%p) (@pkplus p) (@pkmul p) (@pksub p) (@pkopp p) eq. 
+  Proof.
+    pose proof (pKfth p_prime). 
+    invert H.
+    exact F_R.
+  Qed.
+  
   Add Ring RTH: RTH.
   Add Field FTH: FTH.
   
@@ -52,5 +68,129 @@ Module Type GaloisField.
     - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
     - right. intro. inversion H1. contradiction.
   Qed.
+
+  Lemma Ropp_pkmul: forall (a: Fp),
+       pkopp a = pkmul (-1):%p a.
+  Proof.
+     unfold Fp, pK, pkopp, pkmul.
+     intros.
+     unfold pkopp, GZnZ.opp, pkmul, GZnZ.mul.
+     cbn.
+     destruct a.
+     cbn.
+     apply zirr.
+     rewrite Zdiv.Zmult_mod_idemp_l.
+     replace (-1 * val) with (-val) by lia.
+     reflexivity.
+  Qed.
+  
+  Lemma Rmul_inv: forall n, n <> 0:%p -> pkmul (pkdiv 1:%p n) n = 1:%p.
+  Proof.
+    intros.
+    field.
+    exact H.
+  Qed.
+
+  Lemma Rmul_div : forall n w, n <> 0:%p->
+                            pkdiv (pkmul w n) n = w.
+  Proof.
+    intros.
+    field.
+    exact H.
+  Qed.    
+
+  Lemma Rmul_zero_l: forall w, (pkmul w 0:%p) = 0:%p.
+  Proof.
+    intros.
+    apply GZnZ.zirr.
+    rewrite Zmult_comm.
+    pose proof (p_prime).
+    invert H.
+    rewrite Z.mod_0_l.
+    cbn.
+    reflexivity.    
+    intro Hcontra.    
+    rewrite Hcontra in H0.
+    invert H0.
+  Qed.
+  
+   Lemma mod_0_neq_1: 0 mod p <> 1 mod p.
+   Proof.
+     destruct (p_prime).
+     rewrite Z.mod_0_l.
+     rewrite Z.mod_1_l.
+     intro.
+     invert H1.
+     assumption.
+     intro.
+     rewrite H1 in H.
+     invert H.
+   Qed.
+
+
+   Lemma mod_0_neq_min_1: -1 mod p <> 0 mod p.
+   Proof.
+     destruct (p_prime).
+     rewrite Z.mod_0_l.
+     intro.
+     Search modulo.
+     Search Z.gt.
+     pose proof p_gt0.
+     apply Z.lt_gt in H2.
+     - pose proof (Zdiv.Z_div_exact_2 (-1) p H2 H1).
+       pose proof (Zdiv.Zdiv_1_l p H).
+       replace (p*(-1/p)) with (-1*p*(1/p)) in H3.
+       rewrite H4 in H3.
+       rewrite Z.mul_0_r in H3.
+       inversion H3.
+       replace (-1*p) with (p*(-1)) by (apply Z.mul_comm).
+       replace (-1/p) with ((-1)*(1/p)) by lia.
+       rewrite Z.mul_assoc.
+       reflexivity.
+     - exact p_neq0.
+   Qed.
+     
+   Lemma Ropp_1_not_0: pkopp 1:%p <> 0:%p.
+   Proof.
+     rewrite Ropp_pkmul.
+     destruct (pKfth p_prime).
+     destruct F_R.
+     rewrite Rmul_comm.
+     rewrite Rmul_1_l.
+     intro.
+     invert H.
+     apply mod_0_neq_min_1 in H1.
+     inversion H1.
+   Qed.
+
+   Lemma Rmul_non_0: forall a b, pkmul a b <> 0:%p -> a <> 0:%p /\ b <> 0:%p.
+   Proof.
+     intros.
+     
+     split.
+     intro Hcontra;
+       rewrite Hcontra in H;
+       rewrite (Rmul_comm RTH) in H;
+       rewrite Rmul_zero_l in H;
+       contradiction.
+     intro Hcontra;
+     rewrite Hcontra in H;
+     rewrite Rmul_zero_l in H;
+     contradiction.
+  Qed.
+
+  Lemma Rplus_opp: forall a b,
+      pkopp (pkplus b a) = pkplus (pkopp b) (@pkopp p a).
+  Proof.
+    intros.
+    ring.
+  Qed.
+   
+   Lemma Rsub_add_distr: forall a b c,
+       pksub (pkplus b c) (pkplus b a) = @pksub p c a.
+   Proof.
+     intros.   
+     ring.
+   Qed.
 End GaloisField.
   
