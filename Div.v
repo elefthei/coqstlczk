@@ -73,7 +73,6 @@ Module DivGadget(PF: GaloisField).
       econstructor.
       beta.
       cbn.
-
       econstructor.
       apply step_div_const.
       apply neq_stlc_fp.
@@ -85,10 +84,8 @@ Module DivGadget(PF: GaloisField).
       rewrite Radd_0_l in H2.
       apply  Ropp_1_not_0 in H2.
       contradiction.
-
       rewrite Fdiv_def.
       rewrite Rmul_1_l.
-      
       apply Rsub_mul_1_inv in H2.
       rewrite H2.
       apply multi_refl.

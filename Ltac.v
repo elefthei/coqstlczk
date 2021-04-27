@@ -60,3 +60,5 @@ Ltac exists_inverter :=
   repeat match goal with
          | [H': exists a, _ |- _] => inversion H' as [?a ?H2]; clear H'        
          end.
+
+Ltac devec1 x := pose proof (vec1_proj x); exists_inverter; subst.

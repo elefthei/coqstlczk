@@ -2,6 +2,7 @@ Require Import Metalib.Metatheory.
 From STLCZK Require Import GaloisField.
 From STLCZK Require Import Stlc.
 From STLCZK Require Import R1cs.
+From STLCZK Require Import Ltac.
 
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.Numbers.BinNums.
@@ -10,7 +11,6 @@ Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinIntDef.
 Import Z.
 Require Import Coq.ZArith.BinInt.
-
 
 Module Gadget(PF: GaloisField).
   Import PF.
@@ -79,21 +79,41 @@ Module Gadget(PF: GaloisField).
     end.
 
   (** Evaluate closures *)
-  (**
-  Inductive first_order_type: typ -> Prop :=
-  | fo_field: first_order_type <{{ Field }}>
-  | fo_pair: forall a b,
-      first_order_type a ->
-      first_order_type b ->
-      first_order_type <{{ a * b }}>.
-                       
+  
+  Inductive r1cs_type: typ -> Prop :=
+  | fo_field: r1cs_type <{{ Field }}>
+  | fo_bool: r1cs_type <{{ Bool }}>
+  | fo_pair_field: forall b,
+      r1cs_type b ->
+      r1cs_type <{{ Field * b }}>
+  | fo_pair_bool: forall b,
+      r1cs_type b ->
+      r1cs_type <{{ Bool * b }}>.
+
+
+  Inductive r1cs_exp: exp -> Prop :=
+  | eo_field: forall f, r1cs_exp <{ fp f }>
+  | eo_true: r1cs_exp <{ true }>
+  | eo_false: r1cs_exp <{ false }>
+  | eo_pair_field: forall b f,
+      r1cs_exp b ->
+      r1cs_exp <{ {fp f, b} }>
+  | eo_pair_true: forall b,
+      r1cs_exp b ->
+      r1cs_exp <{ {true, b} }>
+  | eo_pair_false: forall b,
+      r1cs_exp b ->
+      r1cs_exp <{ {false, b} }>.
+  
   Definition fo_closure(e: exp)(args: exp): Prop :=
     forall A: typ,
-      first_order_type A ->
+      r1cs_type A ->
     <{{ nil |- args :: A }}> ->
     <{{ nil |- e :: (A -> Field) }}>.
 
-  (** Don't need the state monad yet *)
+
+  
+  (** Don't need the state monad yet
   Record EvalState :=
     mkEvalState {
         vars: list Fp
@@ -109,30 +129,128 @@ Module Gadget(PF: GaloisField).
              {MM: Monad m}
              {MS: MonadState EvalState m} : m exp.
   Admitted.
-   *)
 
+ 
+  
+  where "n e '~~>' v" := (exp_to_vec e v).
+  
+ 
+
+
+  (** Example *)
+  Eval cbn in vec_to_exp [1:%p; 2:%p; 6:%p].  
+
+  (** This only works for Fp native types, not bits! *)
+
+
+  
+  Definition Vtagged := Vector.t tagged.
+  
+
+  Fixpoint transform(e: exp)(t: typ) : exp :=
+   *) 
   Require Import Coq.Vectors.VectorDef.
   Import VectorNotations.
 
-  Fixpoint vec_to_exp_aux{n}(v: Vfp n)(h: Fp): exp :=
+  Fixpoint vec_to_exp_aux{n}(v: Vfp n)(b: Fp): exp :=
     match v with
-    | [] => <{ fp h }>
-    | b :: vs => tm_pair <{ fp h }> (vec_to_exp_aux vs b)      
+    | [] => <{ fp b }>
+    | h :: vs => tm_pair <{ fp b }> (vec_to_exp_aux vs h)
     end.
 
   Definition vec_to_exp{n}(v: Vfp (S n)): exp :=
     @Vector.caseS _ (fun n v => exp) (fun h n t => vec_to_exp_aux t h) _ v.
 
-  (** Example *)
-  Eval cbn in vec_to_exp [1:%p; 2:%p; 6:%p].  
+  Inductive exp_vec: forall n, exp -> Vfp n -> Prop :=
+  | ev_field: forall f, exp_vec 1 <{ fp f }> [f]
+  | ev_true: exp_vec 1 <{ true }> [1:%p]
+  | ev_false: exp_vec 1 <{ false }> [0:%p]
+  | ev_pair_true: forall m v t, 
+      exp_vec m t v ->
+      exp_vec (S m) <{ {true , t} }> (1:%p :: v)
+  | ev_pair_false: forall m v t,
+      exp_vec m t v ->
+      exp_vec (S m) <{ {false , t} }> (0:%p :: v)
+  | ev_pair_field: forall m f v t,
+      exp_vec m t v ->
+      exp_vec (S m) <{ {fp f, t} }> (f :: v).
 
-  Definition r1cs_equiv{n i o v}(e: exp)(cs: @r1cs n (S i) (S o) v): Prop :=
-    forall (inputs: Vfp (S i))(outputs: Vfp (S o))(vars: Vfp v),
-      let args := vec_to_exp inputs in
-      let results := vec_to_exp outputs in
-      <{ e args }> -->* <{ results }> <-> correct cs inputs outputs vars.
+  Inductive exp_typ: forall n, typ -> Vfp n -> Prop :=
+  | et_field: forall f, exp_typ 1 <{{ Field }}> [f]
+  | et_bool: forall f, f = 0:%p \/ f = 1:%p -> exp_typ 1 <{{ Bool }}> [f]
+  | et_pair_bool: forall m v t f, 
+      exp_typ m t v ->
+      f = 0:%p \/ f = 1:%p ->
+      exp_typ (S m) <{{ Bool * t }}> (f :: v)
+  | et_pair_field: forall m f v t,
+      exp_typ m t v ->
+      exp_typ (S m) <{{ Field * t }}> (f :: v).
 
-  Notation "e <=*=> r" := (r1cs_equiv e r) (at level 50).
+  Lemma inversion_principle_bool_bool: forall t a b,
+      <{{ Datatypes.nil |- t :: Bool * Bool }}> ->
+      exp_vec 2 t [a; b] ->
+      ((t = <{ {true, true} }> /\ a = 1:%p /\ b = 1:%p) \/
+       (t = <{ {true, false} }> /\ a = 1:%p /\ b = 0:%p) \/
+       (t = <{ {false, true} }> /\ a = 0:%p /\ b = 1:%p) \/
+       (t = <{ {false, false} }> /\ a = 0:%p /\ b = 0:%p)).
+  Proof.
+    intros t a b Ht Hv.
+    invert Hv;
+    devec1 v;
+    invert H3; invert H2; invert Ht; invert H3; invert H5.
+    - left; intuition auto.
+    - right; left; intuition auto.
+    - right; right; left; intuition auto.
+    - right; right; right; intuition auto.
+  Qed.
+
+  Lemma inversion_principle_bool: forall t a G,
+      <{{ G |- t :: Bool }}> -> exp_vec 1 t [a] ->
+      ((t = <{ true }> /\ a = 1:%p) \/ (t = <{ false }> /\ a = 0:%p)).
+  Proof.
+    intros t a G Ht Hv.
+    invert Ht; invert Hv.
+    left; split; reflexivity.
+    right; split; reflexivity.
+  Qed.
+
+  Lemma inversion_principle_field: forall t a G,
+      <{{ G |- t :: Field }}> -> exp_vec 1 t [a] ->
+      t = <{ fp a }>.
+  Proof.
+    intros t a G Ht Hv.
+    invert Ht; invert Hv.
+    reflexivity.
+  Qed.
+
+  Close Scope vector_scope.
+  Import ListNotations.
+
+  Definition cannonical
+             (args: exp) (G: typing_env) (t: typ) (n: nat) (inps: Vfp (S n)) :=
+    <{{ G |- args :: t }}> /\
+    r1cs_type t /\
+    exp_vec (S n) args inps.
+
+  Check typing_env.
+  Definition r1cs_lambda_tequiv{n i o v}(e: exp)
+             (cs: @r1cs n (S i) (S o) v): Prop :=
+    forall args results inps outs vars t t',
+      <{{ [] |- e :: (t -> t') }}> ->
+      cannonical args [] t i inps ->
+      cannonical results [] t' o outs ->
+      <{ e args }> -->* <{ results }> <->
+      correct cs inps outs vars.
+
+  Definition r1cs_lambda_equiv{n i o v}(e: exp)
+             (cs: @r1cs n (S i) (S o) v): Prop :=
+    forall args results inps outs vars,
+      exp_vec (S i) args inps ->
+      exp_vec (S o) results outs ->
+      <{ e args }> -->* <{ results }> <->
+      correct cs inps outs vars.
+  
+  Notation "e <=*=> r" := (r1cs_lambda_tequiv e r) (at level 50).
 
   Ltac solve_stlc :=
     repeat match goal with

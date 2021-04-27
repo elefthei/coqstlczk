@@ -46,15 +46,6 @@ Module Type GaloisField.
   Qed.
 
   Definition FTH := pKfth p_prime.
-  
-  Definition RTH: ring_theory (0:%p) (1:%p) (@pkplus p) (@pkmul p) (@pksub p) (@pkopp p) eq. 
-  Proof.
-    pose proof (pKfth p_prime). 
-    invert H.
-    exact F_R.
-  Qed.
-  
-  Add Ring RTH: RTH.
   Add Field FTH: FTH.
   
   Lemma eq_field: forall (x y : Fp), {x = y} + {x <> y}.
@@ -65,13 +56,14 @@ Module Type GaloisField.
     destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
     pose proof (Coq.ZArith.BinInt.Z.eq_dec x0 y0).
     inversion H.
-    - left. exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
-    - right. intro. inversion H1. contradiction.
+    - left; exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
+    - right; intro; inversion H1; contradiction.
   Qed.
 
   Lemma Ropp_pkmul: forall (a: Fp),
        pkopp a = pkmul (-1):%p a.
   Proof.
+    intro.
      unfold Fp, pK, pkopp, pkmul.
      intros.
      unfold pkopp, GZnZ.opp, pkmul, GZnZ.mul.
@@ -99,8 +91,8 @@ Module Type GaloisField.
     exact H.
   Qed.    
 
-  Lemma Rmul_zero_l: forall w, (pkmul w 0:%p) = 0:%p.
-  Proof.
+  Lemma Rmul_zero_l: forall (w: Fp), (pkmul w 0:%p) = 0:%p.
+  Proof.    
     intros.
     apply GZnZ.zirr.
     rewrite Zmult_comm.
@@ -127,14 +119,11 @@ Module Type GaloisField.
      invert H.
    Qed.
 
-
    Lemma mod_0_neq_min_1: -1 mod p <> 0 mod p.
    Proof.
      destruct (p_prime).
      rewrite Z.mod_0_l.
      intro.
-     Search modulo.
-     Search Z.gt.
      pose proof p_gt0.
      apply Z.lt_gt in H2.
      - pose proof (Zdiv.Z_div_exact_2 (-1) p H2 H1).
@@ -163,14 +152,24 @@ Module Type GaloisField.
      inversion H1.
    Qed.
 
+   Lemma Rsub_0_0: forall a, a = 0:%p -> pksub 0:%p a = 0:%p.
+     intros.
+     invert H.
+     destruct (F_R FTH).
+     rewrite Rsub_def.
+     rewrite Ropp_def.
+     reflexivity.
+   Qed.
+
    Lemma Rmul_non_0: forall a b, pkmul a b <> 0:%p -> a <> 0:%p /\ b <> 0:%p.
    Proof.
      intros.
-     
+     destruct FTH.
+     invert F_R.
      split.
      intro Hcontra;
        rewrite Hcontra in H;
-       rewrite (Rmul_comm RTH) in H;
+       rewrite Rmul_comm in H;
        rewrite Rmul_zero_l in H;
        contradiction.
      intro Hcontra;
@@ -192,13 +191,13 @@ Module Type GaloisField.
      intros.   
      ring.
    Qed.
-
         
    Lemma Rsub_mul_1_inv:
      forall a b, pksub (pkmul a b) 1:%p = 0:%p -> pkinv a = b.
    Proof.
      intros.
      destruct (eq_field a 0:%p).
+     (** a = 0 *)
      subst.
      destruct (pKfth p_prime).
      destruct F_R.
@@ -209,18 +208,22 @@ Module Type GaloisField.
      apply Ropp_1_not_0 in H.
      contradiction.
 
+     (** a <> 0 *)
      destruct a as [za], b as [zb].
      unfold pksub, GZnZ.sub in *.
      cbn in *.
      invert H.
      cbn in H1.
-     Search modulo.
      rewrite Zdiv.Zminus_mod_idemp_l in H1.
      rewrite Zdiv.Zminus_mod_idemp_r in H1.
-     Search modulo.
      pose proof p_gt0 as GT.
      apply Z.lt_gt in GT.
      pose proof Zdiv.Z_div_exact_2 (za*zb -1) p GT H1.
+     unfold pkinv, inv.
+     cbn.
+     apply zirr.
+     
    Admitted.
+   
 End GaloisField.
   
