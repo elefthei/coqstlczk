@@ -152,6 +152,14 @@ Module Type GaloisField.
      inversion H1.
    Qed.
 
+   Lemma Ropp_0_0: pkopp 0 :%p = 0 :%p.
+     intros.
+     destruct (F_R FTH).
+     replace (pkopp 0:%p) with (pkplus 0:%p (pkopp 0:%p)).
+     apply Ropp_def.
+     apply Ropp_def.
+   Qed.
+
    Lemma Rsub_0_0: forall a, a = 0:%p -> pksub 0:%p a = 0:%p.
      intros.
      invert H.
