@@ -78,6 +78,10 @@ Module Gadget(PF: GaloisField).
     | S g' => normalizer (normalize e) g'
     end.
 
+  Definition normalization_lemma: forall e e', (exists G, normalizer e G = e') <-> e -->* e'.
+  Admitted.
+  
+
   (** Evaluate closures *)
   
   Inductive r1cs_type: typ -> Prop :=
@@ -111,44 +115,6 @@ Module Gadget(PF: GaloisField).
     <{{ nil |- args :: A }}> ->
     <{{ nil |- e :: (A -> Field) }}>.
 
-
-  
-  (** Don't need the state monad yet
-  Record EvalState :=
-    mkEvalState {
-        vars: list Fp
-      }.
-
-  Import MonadNotation.
-  Variable m : Type -> Type.
-  
-  Fixpoint eval_closure
-             (e: exp)
-             (args: exp)
-             {Hc: fo_closure e args}
-             {MM: Monad m}
-             {MS: MonadState EvalState m} : m exp.
-  Admitted.
-
- 
-  
-  where "n e '~~>' v" := (exp_to_vec e v).
-  
- 
-
-
-  (** Example *)
-  Eval cbn in vec_to_exp [1:%p; 2:%p; 6:%p].  
-
-  (** This only works for Fp native types, not bits! *)
-
-
-  
-  Definition Vtagged := Vector.t tagged.
-  
-
-  Fixpoint transform(e: exp)(t: typ) : exp :=
-   *) 
   Require Import Coq.Vectors.VectorDef.
   Import VectorNotations.
 
@@ -241,7 +207,7 @@ Module Gadget(PF: GaloisField).
       cannonical results [] t' o outs ->
       <{ e args }> -->* <{ results }> <->
       correct cs inps outs vars.
-
+(*
   Definition r1cs_lambda_equiv{n i o v}(e: exp)
              (cs: @r1cs n (S i) (S o) v): Prop :=
     forall args results inps outs vars,
@@ -249,7 +215,7 @@ Module Gadget(PF: GaloisField).
       exp_vec (S o) results outs ->
       <{ e args }> -->* <{ results }> <->
       correct cs inps outs vars.
-  
+  *)
   Notation "e <=*=> r" := (r1cs_lambda_tequiv e r) (at level 50).
 
   Ltac solve_stlc :=
