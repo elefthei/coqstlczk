@@ -255,40 +255,5 @@ Module Gadget(PF: GaloisField).
     | [ H: ?f -->* ?b |- _] => idtac f "-->*" b; step_handler f H
     end.
 
-    (**
-    a = { (3[1] + 3i[1]) * (3i[2] + 2[1]) == (o[1]) }; 2 inputs, 1 output
-    b = { (3o[2] + 3i[1]) * (3i[2] + 2i[3]) == (o[1]) }; 3 inputs, 2 outputs 
-    
-    compose :: (a: @r1cs n i o v) (b: @r1cs n' i' v' o') (wires: fin i' -> option (fin o) )(hide: fin o -> bool){forall k: hide k = true -> exists j, wires j = some k}:
-    {j' <= i'}{H: let unmappedInputsOfB = length . filter isNone . map wires [1..i'] in        
-    @r1cs (i + j') 
-    1. Parallel compose a b:  a x b: r1cs 2 5 0 3
-    2. For every input j of b in [1..i'], wires j = some k, 
-       - remove j from i_{axb}
-       - if hide[k] then 
-            append v_{axb}[k'] = k, substitute i_{axb}[j] -> v[k'] in b, o[k] -> v[k'] in a
-         else
-            [o_{axb}[k] / i_{ax}[j]] in b 
-    3. 
-    forall [1..o], hide o = ,  
-    
-   
-    compose :: (a: @r1cs 1 2 0 1) (b: @r1cs 1 3 0 2) (cfg: fin i -> fin o -> option Bool) 
-    1. a x b: r1cs 2 5 0 3
-    2. a o b: 
-    
 
-    # a
-    i[1] -
-    i[2] -   - o[1] - v[1] (private)
- 
-
-    # b
-    i[1]
-    i[2] - o[2] - v[1]
-    i[3] - o[1]
-    
-    
-  
-  *)
 End Gadget.     
