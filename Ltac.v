@@ -62,3 +62,9 @@ Ltac exists_inverter :=
          end.
 
 Ltac devec1 x := pose proof (vec1_proj x); exists_inverter; subst.
+
+Ltac deconj :=
+  repeat lazymatch goal with
+         | [H: _ /\ _ |- _ ] => invert H
+         | [H: _ \/ _ |- _ ] => invert H
+         end.

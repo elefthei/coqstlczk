@@ -45,8 +45,6 @@ exp, e, f, g :: tm_ ::= {{ coq-equality }}
   | { e1 , e2 }            ::   :: pair
   | fst e                  ::   :: proj_1
   | snd e                  ::   :: proj_2
-  | to_bool e              ::   :: to_bool
-  | to_num e               ::   :: to_num
   | ( e )                  :: S :: paren {{ coq ([[e]]) }}
   | { e2 / x } e1          :: M :: subst {{ coq (open_exp_wrt_exp [[x e1]] [[e2]]) }}
 
@@ -153,15 +151,6 @@ G |- fst e : T1
 G |- e: T1*T2
 --------------- :: proj_2
 G |- snd e : T2
-
-G |- e: bool
----------------------- :: to_num
-G |- to_num e: field
-
-G |- e: field
----------------------- :: to_bool
-G |- to_bool e: bool
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -297,29 +286,5 @@ e1 --> e1'
 e2 --> e2'
 --------------------------- :: pair_cog_2
 { e1, e2 } --> { e1, e2' }
-
-%% Casting
-
-------------------------- :: to_num_true
-to_num true --> [1]
-
-------------------------- :: to_num_false
-to_num false --> [0]
-
-e --> e'
--------------------------- :: to_num_cog
-to_num e --> to_num e'
-
-
-------------------------- :: to_bool_true
-to_bool [1] --> true
-
-n <> [1]
-------------------------- :: to_bool_false
-to_bool n --> false
-
-e --> e'
--------------------------- :: to_bool_cog
-to_bool e --> to_bool e'
 
 

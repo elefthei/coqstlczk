@@ -205,5 +205,19 @@ Module R1CS(PF: GaloisField).
 
   Definition correct{n i o v}(r: @r1cs n i o v)(inputs: Vfp i)(outputs: Vfp o)(vars: Vfp v): Prop :=
     @correct_lt n i o v i o v r inputs outputs vars (Nat.le_refl i)(Nat.le_refl o)(Nat.le_refl v).
-             
+
+  Import VectorNotations.
+  Unset Printing Implicit.
+  Lemma example_correct1:
+    correct <[ { (1i[0]) * (1i[1]) == (1o[0]) } ]> [1:%p; 1:%p] [1:%p] [].
+  Proof.
+    unfold correct, correct_lt.
+    cbn.
+    constructor.
+    destruct FTH.
+    inversion F_R.
+    - autorewrite with pk using trivial.
+    - constructor.
+  Qed.
+
 End R1CS.

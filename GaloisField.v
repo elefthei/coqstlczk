@@ -57,11 +57,11 @@ Module Type GaloisField.
   Hint Rewrite (Fdiv_def FTH): pk.
   Hint Rewrite (Finv_l FTH): pk.
   Hint Rewrite (Radd_0_l (F_R FTH)): pk.
-  Hint Rewrite (Radd_comm (F_R FTH)): pk.
-  Hint Rewrite (Radd_assoc (F_R FTH)): pk.
+  (* Hint Rewrite (Radd_comm (F_R FTH)): pk. *)
+  (* Hint Rewrite (Radd_assoc (F_R FTH)): pk. *)
   Hint Rewrite (Rmul_1_l (F_R FTH)): pk.
   (** Hint Rewrite (Rmul_comm (F_R FTH)): pk. *)
-  Hint Rewrite (Rmul_assoc (F_R FTH)): pk.
+  (* Hint Rewrite (Rmul_assoc (F_R FTH)): pk. *)
   Hint Rewrite (Rdistr_l (F_R FTH)): pk.
   Hint Rewrite (Rsub_def (F_R FTH)): pk.
   Hint Rewrite (Ropp_def (F_R FTH)): pk.
@@ -131,7 +131,7 @@ Module Type GaloisField.
   Qed.    
   Hint Rewrite Rmul_div: pk.
   
-  Lemma Rmul_zero_l: forall w, (pkmul w 0:%p) = 0:%p.
+  Lemma Rmul_zero_r: forall w, pkmul w 0:%p = 0:%p.
   Proof.    
     intros.
     apply GZnZ.zirr.
@@ -145,7 +145,15 @@ Module Type GaloisField.
     rewrite Hcontra in H0.
     invert H0.
   Qed.
+  
+  Lemma Rmul_zero_l: forall w, pkmul 0:%p w = 0:%p.
+  Proof.
+    intros.
+    rewrite (Rmul_comm (F_R FTH)).
+    apply Rmul_zero_r.
+  Qed.
   Hint Rewrite Rmul_zero_l: pk.
+  Hint Rewrite Rmul_zero_r: pk.
   
   Lemma mod_0_neq_1: 0 mod p <> 1 mod p.
    Proof.
@@ -182,7 +190,7 @@ Module Type GaloisField.
    Qed.
    Hint Resolve mod_0_neq_min_1: pk.
 
-   Lemma Rplus_min1_1: pkplus (-1):%p 1:%p = 0:%p.
+   Lemma Rplus_min1_1_l: pkplus (-1):%p 1:%p = 0:%p.
    Proof.
      destruct (F_R FTH).
      replace ((-1):%p) with (pkopp 1:%p).
@@ -196,23 +204,39 @@ Module Type GaloisField.
      rewrite Rmod1_1.
      cbn. reflexivity.
    Qed.
-   Hint Rewrite Rplus_min1_1.
-   Hint Resolve Rplus_min1_1.
-
-   Lemma Rmul_min1_1: pkmul (-1):%p 1:%p = pkopp 1:%p.
+   Hint Rewrite Rplus_min1_1_l: pk.
+  
+   Lemma Rplus_min1_1_r: pkplus 1:%p (-1):%p = 0:%p.
    Proof.
+     destruct (F_R FTH).
+     rewrite Radd_comm.
+     apply Rplus_min1_1_l.
+   Qed.
+   Hint Rewrite Rplus_min1_1_r: pk.
+  
+   Lemma Rmul_min1_a_l: forall a, pkmul (-1):%p a = pkopp a.
+   Proof.
+     intros.
+     destruct a.
      unfold pkmul, GZnZ.mul, pkopp, GZnZ.opp.
      cbn.
      apply zirr.
-     rewrite Rmod1_1.
-     cbn.
-     rewrite Z.mul_1_r.
-     Search modulo.
-     rewrite Z.mod_mod.
+     rewrite Zdiv.Zmult_mod_idemp_l.
+     rewrite Z.opp_eq_mul_m1.
+     rewrite Z.opp_eq_mul_m1.
      reflexivity.
-     exact p_neq0.
    Qed.
+   Hint Rewrite Rmul_min1_a_l: pk.
 
+   Lemma Rmul_min1_a_r: forall a, pkmul a (-1):%p = pkopp a.
+   Proof.
+     intros.
+     destruct (F_R FTH).
+     rewrite Rmul_comm.
+     apply Rmul_min1_a_l.
+   Qed.
+   Hint Rewrite Rmul_min1_a_r: pk.
+   
    Lemma Ropp_1_not_0: pkopp 1:%p <> 0:%p.
    Proof.
      rewrite Ropp_pkmul.
@@ -235,16 +259,15 @@ Module Type GaloisField.
      apply Ropp_def.
    Qed.
    Hint Rewrite Ropp_0_0: pk.
-   
-   Lemma Rsub_0_0: forall a, a = 0:%p -> pksub 0:%p a = 0:%p.
-     intros.
-     invert H.
+
+   Lemma Radd_0_r : forall x, pkplus x (pkO p) = x.
+   Proof.
      destruct (F_R FTH).
-     rewrite Rsub_def.
-     rewrite Ropp_def.
-     reflexivity.
+     intros.
+     rewrite Radd_comm.
+     apply Radd_0_l.
    Qed.
-   Hint Resolve Rsub_0_0: pk.
+   Hint Rewrite Radd_0_r: pk.
    
    Lemma Rmul_non_0: forall a b, pkmul a b <> 0:%p -> a <> 0:%p /\ b <> 0:%p.
    Proof.
@@ -255,17 +278,15 @@ Module Type GaloisField.
      split.
      intro Hcontra;
        rewrite Hcontra in H;
-       rewrite Rmul_comm in H;
        rewrite Rmul_zero_l in H;
        contradiction.
      intro Hcontra;
      rewrite Hcontra in H;
-     rewrite Rmul_zero_l in H;
+     rewrite Rmul_zero_r in H;
      contradiction.
    Qed.
    Hint Resolve Rmul_non_0: pk.
 
-   
    Lemma Rplus_opp: forall a b,
        pkopp (pkplus b a) = pkplus (pkopp b) (@pkopp p a).
    Proof.
@@ -288,7 +309,8 @@ Module Type GaloisField.
      intros. 
      ring.
    Qed.
-
+   Hint Rewrite Rsub_distr_l: pk.
+   
    Lemma Rmul_both_sides: forall a b c,
        a = b -> pkmul a c = @pkmul p b c.
    Proof.
@@ -296,6 +318,7 @@ Module Type GaloisField.
      rewrite H.
      reflexivity.
    Qed.
+   Hint Resolve Rmul_both_sides: pk.
 
    (** TODO *)
    Lemma Rmul_non_zero_0: forall a b,
@@ -312,7 +335,6 @@ Module Type GaloisField.
      cbn.
      invert H0.
      cbn in H2.
-     
    Admitted.
      
    Lemma Rsub_mul_1_inv:
@@ -326,7 +348,6 @@ Module Type GaloisField.
      subst.
      destruct (pKfth p_prime).
      destruct F_R.
-     rewrite Rmul_comm in H.
      rewrite Rmul_zero_l in H.
      rewrite Rsub_def in H.
      rewrite Radd_0_l in H.
@@ -352,8 +373,55 @@ Module Type GaloisField.
      apply Radd_0_l.
      apply Finv_l.
      exact n.
-Qed.     
+   Qed.     
 
+   Lemma Rsub_a_0: forall a, pksub a a = 0:%p.
+   Proof.
+     intro a.
+     destruct (FTH).
+     destruct F_R.
+     rewrite Rsub_def.
+     rewrite Ropp_def.
+     reflexivity.
+   Qed.
+   Hint Rewrite Rsub_a_0: pk.
+
+   Lemma Ropp_mul_l: forall x y, pkopp (pkmul x y) = @pkmul p (pkopp x) y.
+   Proof.
+     intros.
+     destruct (F_R FTH).
+     rewrite <- (Radd_0_l (pkmul (pkopp x) y)).
+     rewrite Radd_comm, <-(Ropp_def (pkmul x y)).
+     rewrite Radd_assoc, <- Rdistr_l.
+     rewrite (Radd_comm (pkopp x)), Ropp_def.
+     rewrite Rmul_zero_l, Radd_0_l. 
+     reflexivity.
+   Qed.
+   Hint Rewrite Ropp_mul_l: pk.
    
+   Lemma Ropp_opp: forall x, pkopp (@pkopp p x) = x.
+   Proof.
+     intros.
+     destruct (F_R FTH).
+     rewrite <- (Radd_0_l (pkopp (pkopp x))).
+     rewrite <- (Ropp_def x).
+     rewrite <- Radd_assoc, Ropp_def.
+     rewrite (Radd_comm x); now apply Radd_0_l.
+   Qed.
+   Hint Rewrite Ropp_opp: pk.
+   
+   Lemma Rmul_min1_min1:
+     pkmul (-1):%p (-1):%p = 1:%p.
+   Proof.
+     destruct (F_R FTH).
+     replace ((-1):%p) with (pkmul (-1):%p 1:%p) by (apply Rmul_1_r).
+     rewrite Rmul_min1_a_l.
+     rewrite <- Ropp_mul_l.
+     rewrite Rmul_1_l.
+     rewrite Ropp_opp.
+     reflexivity.
+   Qed.
+   Hint Rewrite Rmul_min1_min1: pk.
+
 End GaloisField.
   

@@ -48,9 +48,7 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | tm_ifthenelse (e:exp) (e1:exp) (e2:exp)
   | tm_pair (e1:exp) (e2:exp)
   | tm_proj_1 (e:exp)
-  | tm_proj_2 (e:exp)
-  | tm_to_bool (e:exp)
-  | tm_to_num (e:exp).
+  | tm_proj_2 (e:exp).
 
   Definition typing_env : Set := list (atom*typ).
   Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
@@ -99,8 +97,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_pair e1 e2) => ((is_value_of_exp e1) && (is_value_of_exp e2))
     | (tm_proj_1 e) => false
     | (tm_proj_2 e) => false
-    | (tm_to_bool e) => false
-    | (tm_to_num e) => false
     end.
 
   (** arities *)
@@ -120,8 +116,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_pair e1 e2) => tm_pair (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
     | (tm_proj_1 e) => tm_proj_1 (open_exp_wrt_exp_rec k e_5 e)
     | (tm_proj_2 e) => tm_proj_2 (open_exp_wrt_exp_rec k e_5 e)
-    | (tm_to_bool e) => tm_to_bool (open_exp_wrt_exp_rec k e_5 e)
-    | (tm_to_num e) => tm_to_num (open_exp_wrt_exp_rec k e_5 e)
     end.
 
   Definition open_exp_wrt_exp e_5 e__6 := open_exp_wrt_exp_rec 0 e__6 e_5.
@@ -171,13 +165,7 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
       (lc_exp (tm_proj_1 e))
   | lc_tm_proj_2 : forall (e:exp),
       (lc_exp e) ->
-      (lc_exp (tm_proj_2 e))
-  | lc_tm_to_bool : forall (e:exp),
-      (lc_exp e) ->
-      (lc_exp (tm_to_bool e))
-  | lc_tm_to_num : forall (e:exp),
-      (lc_exp e) ->
-      (lc_exp (tm_to_num e)).
+      (lc_exp (tm_proj_2 e)).
   (** free variables *)
   Fixpoint fv_exp (e_5:exp) : vars :=
     match e_5 with
@@ -194,8 +182,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_pair e1 e2) => (fv_exp e1) \u (fv_exp e2)
     | (tm_proj_1 e) => (fv_exp e)
     | (tm_proj_2 e) => (fv_exp e)
-    | (tm_to_bool e) => (fv_exp e)
-    | (tm_to_num e) => (fv_exp e)
     end.
 
   (** substitutions *)
@@ -214,8 +200,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_pair e1 e2) => tm_pair (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
     | (tm_proj_1 e) => tm_proj_1 (subst_exp e_5 x5 e)
     | (tm_proj_2 e) => tm_proj_2 (subst_exp e_5 x5 e)
-    | (tm_to_bool e) => tm_to_bool (subst_exp e_5 x5 e)
-    | (tm_to_num e) => tm_to_num (subst_exp e_5 x5 e)
     end.
 
 
@@ -273,13 +257,7 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
       typing G (tm_proj_1 e) T1
   | typing_proj_2 : forall (G:typing_env) (e:exp) (T2 T1:typ),
       typing G e (ty_prod T1 T2) ->
-      typing G (tm_proj_2 e) T2
-  | typing_to_num : forall (G:typing_env) (e:exp),
-      typing G e ty_bool ->
-      typing G (tm_to_num e) ty_field
-  | typing_to_bool : forall (G:typing_env) (e:exp),
-      typing G e ty_field ->
-      typing G (tm_to_bool e) ty_bool.
+      typing G (tm_proj_2 e) T2.
 
   (* defns Jop *)
   Inductive step : exp -> exp -> Prop :=    (* defn step *)
@@ -396,26 +374,12 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | step_pair_cog_2 : forall (e1 e2 e2':exp),
       lc_exp e1 ->
       step e2 e2' ->
-      step (tm_pair e1 e2) (tm_pair e1 e2')
-  | step_to_num_true : 
-      step (tm_to_num (tm_constant (const_bool  true ))) (tm_constant (const_field  1:%p ))
-  | step_to_num_false : 
-      step (tm_to_num (tm_constant (const_bool  false ))) (tm_constant (const_field  0:%p ))
-  | step_to_num_cog : forall (e e':exp),
-      step e e' ->
-      step (tm_to_num e) (tm_to_num e')
-  | step_to_bool_true : 
-      step (tm_to_bool (tm_constant (const_field  1:%p ))) (tm_constant (const_bool  true ))
-  | step_to_bool_false : forall (n5:Fp),
-      (const_field n5)  <>  (const_field  1:%p )  ->
-      step (tm_to_bool (tm_constant (const_field n5))) (tm_constant (const_bool  false ))
-  | step_to_bool_cog : forall (e e':exp),
-      step e e' ->
-      step (tm_to_bool e) (tm_to_bool e').
+      step (tm_pair e1 e2) (tm_pair e1 e2').
 
 
   (** infrastructure *)
   Hint Constructors typing step lc_exp : core.
+
 End Stlc_Ott. 
 
 Module Stlc(PF: GaloisField).
@@ -464,12 +428,11 @@ Module Stlc(PF: GaloisField).
   Notation "x && y" := (tm_binop x op_and y) (in custom stlc at level 4,
                                                  left associativity).
   Notation "x || y" := (tm_binop x op_or y) (in custom stlc at level 4,
-                                               left associativity).
+                                                left associativity).
   Notation "x == y" := (tm_eq x y) (in custom stlc at level 3,
                                        left associativity).
   Notation "! x " := (tm_not x) (in custom stlc at level 3).
-  Notation "'to_bool' x" := (tm_to_bool x) (in custom stlc at level 4).
-  Notation "'to_field' x" := (tm_to_num x) (in custom stlc at level 4).
+
   Notation "'if' x 'then' y 'else' z" :=
     (tm_ifthenelse x y z) (in custom stlc at level 89,
                               x custom stlc at level 99,
@@ -480,22 +443,10 @@ Module Stlc(PF: GaloisField).
     (tm_let t1 t2) (in custom stlc at level 88,
                        t1 custom stlc at level 99,
                        t2 custom stlc at level 99,
-                   left associativity).
+                       left associativity).
   Notation "'{' a ',' b '}'" := (tm_pair a b) (in custom stlc at level 5, right associativity).
   Notation "'fst' a" := (tm_proj_1 a) (in custom stlc at level 5).
   Notation "'snd' a" := (tm_proj_2 a) (in custom stlc at level 5).
-
-  Ltac beta :=
-    eapply step_beta;
-    solve [
-        econstructor
-      | repeat match goal with
-               | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
-                 idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
-               | [ |- lc_exp <{ \_ : _, _ }> ] =>
-                 idtac "empty binders"; apply (lc_tm_abs empty); intros
-               end
-      | repeat econstructor]; repeat econstructor.
   
   (** Equality projections *)
   Lemma eq_stlc_fp: forall n w, <{ fp n }> = <{ fp w }> <-> n = w.
@@ -514,6 +465,10 @@ Module Stlc(PF: GaloisField).
     apply eq_stlc_fp in H0.
     contradiction.
   Qed.
+  Hint Resolve eq_stlc_fp: pk.
+  Hint Resolve neq_stlc_fp: pk.
+  
 End Stlc.
+
 
 
