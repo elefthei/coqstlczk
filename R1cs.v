@@ -12,25 +12,12 @@ Require Import Coq.Init.Nat.
 Require Import Coq.Vectors.VectorDef.
 Require Import Coq.Vectors.Fin.
 
-(**
-   1. Use a state monad to compile equations to R1CS
-   2. R1CS semantics: 
-        For some z = vars ++ [1] ++ inputs, <A*z, B*z> = C*z
-   3. Use https://apps.cs.utexas.edu/tech_reports/reports/tr/TR-2112.pdf
-      for compilation
-   4. Prove each rewrite rule according to circuit_equiv.
-   5. Given rules: { 
-              proof1: tm_eq ~ eq_check,
-              proof2: tm_div ~ div_check,
-              proof3: tm_ifthenelse ~ ite_check,
-              ...
-            }
-      And (e: exp) -> e_check: R1CS and proof proof_e: e ~ e_check.
- *)
+Set Implicit Arguments.
+Set Printing Implicit.
+
 Module R1CS(PF: GaloisField).
   Import PF.
   Import VectorNotations.
-  Set Printing Implicit.
   Definition Vfp := Vector.t Fp.
   
   Inductive term: nat -> nat -> nat -> Set :=
@@ -68,7 +55,7 @@ Module R1CS(PF: GaloisField).
   Arguments lc {i} {o} {v} {i'} {o'} {v'} {i''} {o''} {v''}.
   Arguments rcons {n} {i} {o} {v} {i'} {o'} {v'}.
   Arguments r1cs {n} {i} {o} {v}.
-
+  
   Definition r1cs_singleton{i o v}(c: @constraint i o v) :=
     rcons c rnil.
 
@@ -99,7 +86,7 @@ Module R1CS(PF: GaloisField).
           a1 custom r1cs at level 4,
           a2 custom r1cs at level 4,
           a3 custom r1cs at level 4).
-
+  
   Notation "z 'i[' n ']'" :=
     (to_p z, input n%nat)
       (in custom r1cs at level 4,
@@ -117,7 +104,7 @@ Module R1CS(PF: GaloisField).
       (in custom r1cs at level 4,
           n constr,
           z constr).
-  
+
   Notation "[ z ]" :=
     (to_p z, one)
       (in custom r1cs at level 4,
@@ -218,5 +205,19 @@ Module R1CS(PF: GaloisField).
 
   Definition correct{n i o v}(r: @r1cs n i o v)(inputs: Vfp i)(outputs: Vfp o)(vars: Vfp v): Prop :=
     @correct_lt n i o v i o v r inputs outputs vars (Nat.le_refl i)(Nat.le_refl o)(Nat.le_refl v).
-             
+
+  Import VectorNotations.
+  Unset Printing Implicit.
+  Lemma example_correct1:
+    correct <[ { (1i[0]) * (1i[1]) == (1o[0]) } ]> [1:%p; 1:%p] [1:%p] [].
+  Proof.
+    unfold correct, correct_lt.
+    cbn.
+    constructor.
+    destruct FTH.
+    inversion F_R.
+    - autorewrite with pk using trivial.
+    - constructor.
+  Qed.
+
 End R1CS.

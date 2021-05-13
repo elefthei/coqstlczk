@@ -6,7 +6,6 @@ $(OBJS): Stlc.v Gadgets.v
 
 Stlc.v: Stlc.ott
 	ott -i $< -o $@
-	patch -u $@ -i stlc.patch
 
 .PHONY: ott
 ott: Stlc.v

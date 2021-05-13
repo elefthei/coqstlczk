@@ -11,12 +11,13 @@ Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinIntDef.
 Import Z.
 Require Import Coq.ZArith.BinInt.
+Require Import Coq.Vectors.VectorDef.
 
 Module Gadget(PF: GaloisField).
   Import PF.
   Include R1CS PF.
   Include Stlc PF.
-  
+
   (** TR closure *)
   Inductive multi {X : Type} (R : relation X) : relation X :=
   | multi_refl : forall (x : X), multi R x x
@@ -42,14 +43,6 @@ Module Gadget(PF: GaloisField).
         <{ c (fp n) }> -->* <{ fp w }>). 
   Notation "a '~~' b" := (circuit_equiv a b) (at level 50).
 
-  Definition circuit_equiv_poly(c: exp) (c': exp): Prop :=
-    forall n w T,
-      <{{ nil |- c n :: T }}> ->
-      <{{ nil |- c' n w :: Bool }}> ->
-      (<{ c' n w }> -->* <{ true }> <->
-       <{ c n }> -->* <{ w }>).
-  Notation "a ~= b" := (circuit_equiv_poly a b) (at level 99).
-
   Fixpoint normalize(e: exp) :=
     match e with
     | tm_app (tm_abs T e1) v1 =>
@@ -65,10 +58,6 @@ Module Gadget(PF: GaloisField).
     | tm_not e1 => tm_not (normalize e1)
     | tm_ifthenelse e e1 e2 =>
       tm_ifthenelse (normalize e) (normalize e1) (normalize e2)
-    | tm_pair e1 e2 =>
-      tm_pair (normalize e1) (normalize e2)
-    | tm_proj_1 e => tm_proj_1 (normalize e)
-    | tm_proj_2 e => tm_proj_2 (normalize e)
     | e => e
     end.
 
@@ -78,188 +67,131 @@ Module Gadget(PF: GaloisField).
     | S g' => normalizer (normalize e) g'
     end.
 
+  Definition normalization_lemma: forall e e', (exists G, normalizer e G = e') <-> e -->* e'.
+  Admitted.  
+
   (** Evaluate closures *)
-  
+  Inductive fo_type: typ -> Prop :=
+  | fo_field: fo_type <{{ Field }}>
+  | fo_bool: fo_type <{{ Bool }}>.
+
   Inductive r1cs_type: typ -> Prop :=
-  | fo_field: r1cs_type <{{ Field }}>
-  | fo_bool: r1cs_type <{{ Bool }}>
-  | fo_pair_field: forall b,
+  | ro_unary: forall t, fo_type t -> r1cs_type t
+  | ro_pair: forall t b,
+      fo_type t ->
       r1cs_type b ->
-      r1cs_type <{{ Field * b }}>
-  | fo_pair_bool: forall b,
-      r1cs_type b ->
-      r1cs_type <{{ Bool * b }}>.
+      r1cs_type <{{ t * b }}>.
 
-
-  Inductive r1cs_exp: exp -> Prop :=
-  | eo_field: forall f, r1cs_exp <{ fp f }>
-  | eo_true: r1cs_exp <{ true }>
-  | eo_false: r1cs_exp <{ false }>
-  | eo_pair_field: forall b f,
-      r1cs_exp b ->
-      r1cs_exp <{ {fp f, b} }>
-  | eo_pair_true: forall b,
-      r1cs_exp b ->
-      r1cs_exp <{ {true, b} }>
-  | eo_pair_false: forall b,
-      r1cs_exp b ->
-      r1cs_exp <{ {false, b} }>.
+  Inductive fo_exp: exp -> Fp -> Prop :=
+  | fo_fp: forall p, fo_exp <{ fp p }> p
+  | fo_true: fo_exp <{ true }> (1:%p)
+  | fo_false: fo_exp <{ false }> (0:%p).
   
-  Definition fo_closure(e: exp)(args: exp): Prop :=
-    forall A: typ,
-      r1cs_type A ->
-    <{{ nil |- args :: A }}> ->
-    <{{ nil |- e :: (A -> Field) }}>.
-
-
-  
-  (** Don't need the state monad yet
-  Record EvalState :=
-    mkEvalState {
-        vars: list Fp
-      }.
-
-  Import MonadNotation.
-  Variable m : Type -> Type.
-  
-  Fixpoint eval_closure
-             (e: exp)
-             (args: exp)
-             {Hc: fo_closure e args}
-             {MM: Monad m}
-             {MS: MonadState EvalState m} : m exp.
-  Admitted.
-
- 
-  
-  where "n e '~~>' v" := (exp_to_vec e v).
-  
- 
-
-
-  (** Example *)
-  Eval cbn in vec_to_exp [1:%p; 2:%p; 6:%p].  
-
-  (** This only works for Fp native types, not bits! *)
-
-
-  
-  Definition Vtagged := Vector.t tagged.
-  
-
-  Fixpoint transform(e: exp)(t: typ) : exp :=
-   *) 
-  Require Import Coq.Vectors.VectorDef.
-  Import VectorNotations.
-
-  Fixpoint vec_to_exp_aux{n}(v: Vfp n)(b: Fp): exp :=
-    match v with
-    | [] => <{ fp b }>
-    | h :: vs => tm_pair <{ fp b }> (vec_to_exp_aux vs h)
+  Import VectorNotations.  
+  Inductive cannonical: forall n, exp -> typ -> Vfp n -> Prop :=
+  | ev_field: forall f, cannonical 1 <{ fp f }> <{{ Field }}> [f]
+  | ev_true: cannonical 1 <{ true }> <{{ Bool }}> [1:%p]
+  | ev_false: cannonical 1 <{ false }> <{{ Bool }}> [0:%p]
+  | ev_pair_true: forall m v e t, 
+      cannonical m e t v ->
+      <{{ Datatypes.nil |- e :: t }}> ->
+      cannonical (S m) <{ {true , e} }> <{{ Bool * t }}> (1:%p :: v)
+  | ev_pair_false: forall m v e t,
+      cannonical m e t v ->
+      <{{ Datatypes.nil |- e :: t }}> ->
+      cannonical (S m) <{ {false , e} }> <{{ Bool * t }}> (0:%p :: v)
+  | ev_pair_field: forall m f v e t,
+      cannonical m e t v ->
+      <{{ Datatypes.nil |- e :: t }}> ->
+      cannonical (S m) <{ {fp f, e} }> <{{ Field * t }}> (f :: v).
+     
+  Local Open Scope nat_scope.
+  Fixpoint num_arg(e: exp): nat :=
+    match e with
+    | <{ \_: t, _}> =>
+      (fix num_telems t :=
+      match t with 
+      | <{{ Field * b }}> => 1 + num_telems b
+      | <{{ Bool * b }}> => 1 + num_telems b
+      | <{{ Field }}> => 1
+      | <{{ Bool }}> => 1
+      | _ => 0
+      end) t
+    | _ => 0
     end.
 
-  Definition vec_to_exp{n}(v: Vfp (S n)): exp :=
-    @Vector.caseS _ (fun n v => exp) (fun h n t => vec_to_exp_aux t h) _ v.
+  Fixpoint num_ret(e: exp): nat :=
+    match e with
+    | <{ a b }> => num_ret a
+    | <{ \_: _, b }> => num_ret b
+    | <{ {a, b} }> => 1 + num_ret b
+    | tm_binop a _ b => 1
+    | <{ fst a }> => 1
+    | <{ snd b }> => num_ret b - 1
+    | <{ if _ then a else _ }> => num_ret a
+    | _ => 1
+    end.
 
-  Inductive exp_vec: forall n, exp -> Vfp n -> Prop :=
-  | ev_field: forall f, exp_vec 1 <{ fp f }> [f]
-  | ev_true: exp_vec 1 <{ true }> [1:%p]
-  | ev_false: exp_vec 1 <{ false }> [0:%p]
-  | ev_pair_true: forall m v t, 
-      exp_vec m t v ->
-      exp_vec (S m) <{ {true , t} }> (1:%p :: v)
-  | ev_pair_false: forall m v t,
-      exp_vec m t v ->
-      exp_vec (S m) <{ {false , t} }> (0:%p :: v)
-  | ev_pair_field: forall m f v t,
-      exp_vec m t v ->
-      exp_vec (S m) <{ {fp f, t} }> (f :: v).
+  Close Scope vector_scope.
+  Import ListNotations.
+  Definition r1cs_lambda_equiv{n v}(e: exp)
+             (cs: @r1cs n (num_arg e) (num_ret e) v): Prop :=
+    forall (args: exp)
+      (result: exp)
+      (inps: Vfp (num_arg e))
+      (outs: Vfp (num_ret e))
+      (vars: Vfp v) t t'
+      (** axioms *)
+      (HeT: <{{ [] |- e :: (t -> t') }}>)
+      (HcannonIn: cannonical (num_arg e) args t inps)
+      (HcannonOut: cannonical (num_ret e) result t' outs),
+      (** equivalence relation *)
+      <{ e args }> -->* <{ result }> <->
+      correct cs inps outs vars.
 
-  Inductive exp_typ: forall n, typ -> Vfp n -> Prop :=
-  | et_field: forall f, exp_typ 1 <{{ Field }}> [f]
-  | et_bool: forall f, f = 0:%p \/ f = 1:%p -> exp_typ 1 <{{ Bool }}> [f]
-  | et_pair_bool: forall m v t f, 
-      exp_typ m t v ->
-      f = 0:%p \/ f = 1:%p ->
-      exp_typ (S m) <{{ Bool * t }}> (f :: v)
-  | et_pair_field: forall m f v t,
-      exp_typ m t v ->
-      exp_typ (S m) <{{ Field * t }}> (f :: v).
+  Notation "e <=*=> r" := (r1cs_lambda_equiv e r) (at level 50).
+  
+  Close Scope list_scope.
+  Open Scope vector_scope.
 
-  Lemma inversion_principle_bool_bool: forall t a b,
-      <{{ Datatypes.nil |- t :: Bool * Bool }}> ->
-      exp_vec 2 t [a; b] ->
-      ((t = <{ {true, true} }> /\ a = 1:%p /\ b = 1:%p) \/
-       (t = <{ {true, false} }> /\ a = 1:%p /\ b = 0:%p) \/
-       (t = <{ {false, true} }> /\ a = 0:%p /\ b = 1:%p) \/
-       (t = <{ {false, false} }> /\ a = 0:%p /\ b = 0:%p)).
+  Program Definition cannonical_forms_bool_bool: forall e a b,
+      cannonical 2 e <{{ Bool * Bool }}> [a; b] ->
+      ((e = <{ {true, true} }> /\ a = 1:%p /\ b = 1:%p) \/
+       (e = <{ {true, false} }> /\ a = 1:%p /\ b = 0:%p) \/
+       (e = <{ {false, true} }> /\ a = 0:%p /\ b = 1:%p) \/
+       (e = <{ {false, false} }> /\ a = 0:%p /\ b = 0:%p)).
   Proof.
-    intros t a b Ht Hv.
-    invert Hv;
-    devec1 v;
-    invert H3; invert H2; invert Ht; invert H3; invert H5.
+    intros e a b Hc.
+    invert Hc; invert H4; devec1 v; invert H3; invert H. 
     - left; intuition auto.
-    - right; left; intuition auto.
+    - right; left; intuition auto.      
     - right; right; left; intuition auto.
     - right; right; right; intuition auto.
   Qed.
 
-  Lemma inversion_principle_bool: forall t a G,
-      <{{ G |- t :: Bool }}> -> exp_vec 1 t [a] ->
-      ((t = <{ true }> /\ a = 1:%p) \/ (t = <{ false }> /\ a = 0:%p)).
+  Lemma cannonical_forms_bool: forall e a,
+      cannonical 1 e <{{ Bool }}> [a] ->
+      ((e = <{ true }> /\ a = 1:%p) \/ (e = <{ false }> /\ a = 0:%p)).
   Proof.
-    intros t a G Ht Hv.
-    invert Ht; invert Hv.
-    left; split; reflexivity.
-    right; split; reflexivity.
+    intros e a Hc.
+    invert Hc. 
+    - left; split; reflexivity.
+    - right; split; reflexivity.
   Qed.
 
-  Lemma inversion_principle_field: forall t a G,
-      <{{ G |- t :: Field }}> -> exp_vec 1 t [a] ->
-      t = <{ fp a }>.
-  Proof.
-    intros t a G Ht Hv.
-    invert Ht; invert Hv.
-    reflexivity.
-  Qed.
-
-  Close Scope vector_scope.
-  Import ListNotations.
-
-  Definition cannonical
-             (args: exp) (G: typing_env) (t: typ) (n: nat) (inps: Vfp (S n)) :=
-    <{{ G |- args :: t }}> /\
-    r1cs_type t /\
-    exp_vec (S n) args inps.
-
-  Check typing_env.
-  Definition r1cs_lambda_tequiv{n i o v}(e: exp)
-             (cs: @r1cs n (S i) (S o) v): Prop :=
-    forall args results inps outs vars t t',
-      <{{ [] |- e :: (t -> t') }}> ->
-      cannonical args [] t i inps ->
-      cannonical results [] t' o outs ->
-      <{ e args }> -->* <{ results }> <->
-      correct cs inps outs vars.
-
-  Definition r1cs_lambda_equiv{n i o v}(e: exp)
-             (cs: @r1cs n (S i) (S o) v): Prop :=
-    forall args results inps outs vars,
-      exp_vec (S i) args inps ->
-      exp_vec (S o) results outs ->
-      <{ e args }> -->* <{ results }> <->
-      correct cs inps outs vars.
-  
-  Notation "e <=*=> r" := (r1cs_lambda_tequiv e r) (at level 50).
+  Lemma cannonical_forms_field: forall e a,
+      cannonical 1 e <{{ Field }}> [a] ->
+      e = <{ fp a }>.
+  Proof. intros e a Hc; invert Hc; reflexivity. Qed.
 
   Ltac solve_stlc :=
-    repeat match goal with
+    repeat lazymatch goal with
            | [ |- step (tm_eq ?a ?b) _ ] =>
              apply step_eq_refl || apply step_eq_cog_1 || apply step_eq_cog_2
            | [ |- step (tm_binop _ op_mul _) _ ] => apply step_mul_const
            | [ |- step (tm_app ((tm_abs _ _))  _) _] => eapply step_beta
            | [ H: step ?a ?b |- ?g ] => inversion H; subst; clear H
-           | [ H: ?a -->* ?b |- _ ] => inversion H; subst; clear H
+           | [ H: ?a -->* ?b |- _ ] => idtac "invert -->*";inversion H; subst; clear H
            | [ |- Is_true _ ] => idtac "is_true"; constructor
            | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
              idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
@@ -269,7 +201,59 @@ Module Gadget(PF: GaloisField).
            | [ H: context[open_exp_wrt_exp _ _] |- _] => cbn in H
            | [ |- context[open_exp_wrt_exp _ _] ] => cbn
            | [ H: ?a |- ?a ] => exact H
-           | [ |- _ -->* _ ] => idtac "forward" ; econstructor; fail
+           | [ |- _ -->* _ ] => idtac "forward -->*" ; econstructor; fail
            end.
+
+  Ltac beta :=
+    eapply step_beta;
+    solve [
+        econstructor
+      | repeat lazymatch goal with
+               | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+                 idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+               | [ |- lc_exp <{ \_ : _, _ }> ] =>
+                 idtac "empty binders"; apply (lc_tm_abs empty); intros
+               end
+      | repeat econstructor]; repeat econstructor.
+  
+  Ltac invert_types :=
+    lazymatch goal with
+           | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+             idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+           | [ H: context[open_exp_wrt_exp _ _] |- _] => cbn in H
+           | [ H: ?a |- ?a ] => exact H
+           | [H: <{{ ?G |- ?e :: ?t }}> |- _] => idtac "TYPE" t; inversion H; subst; clear H
+           | [H: binds ?x ?t ?G |- _] => idtac "TYPE BINDS" t; inversion H; subst; clear H
+           | [H: (?x, ?t) = (?x, ?t') |- _] => match type of t with
+                                             | typ => idtac "TYPE EQ"; inversion H; clear H
+                                             end
+           | [H: List.In (?x, ?t) ?L |- _] => match type of t with
+                                            | typ => idtac "TYPE ENV"; inversion H; clear H
+                                            end
+    end.
+
+  Ltac step_handler P H :=
+    lazymatch P with
+    | <{ (\_ : ?t, ?b) (?v) }> => idtac "beta [" v "/" b "]"; inversion H; clear H
+    | tm_constant ?c => idtac "const" c; inversion H; clear H 
+    | <{ if ?c then _ else _ }> => idtac "ite"; inversion H; clear H
+    | tm_binop ?a ?x ?b => idtac a x b; inversion H; clear H
+    | <{ \_ : ?t, ?b }> => idtac "abs \_: " t "," b; inversion H; clear H
+    | <{ {?a, ?b} }> => idtac "pair {" a "," b "}"; inversion H; clear H
+    | <{ fst ?a }> => idtac "fst {" a "}"; inversion H; clear H
+    | <{ snd ?a }> => idtac "snd {" a "}"; inversion H; clear H
+    | ?e => idtac "NO MATCH" e; fail 2
+    end; subst.
+  
+  Ltac invert_stlc :=
+    lazymatch goal with
+    | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+      idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+    | [ H: context[open_exp_wrt_exp _ _] |- _] => cbn in H
+    | [ H: ?a |- ?a ] => exact H
+    | [ H: step ?f ?b |- _] => idtac f "-->" b; step_handler f H
+    | [ H: ?f -->* ?b |- _] => idtac f "-->*" b; step_handler f H
+    end.
+
 
 End Gadget.     
