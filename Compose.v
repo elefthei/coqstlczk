@@ -51,9 +51,12 @@ Module Compose(PF: GaloisField).
   (** a || b && c *)
 
   andb_check = <[ {(1 i[ 0]) * (1 i[ 1]) == (1 v[ 0])} ]>
-  orb_check = <[ {(1 v[ 0] + [(-1)]) * ([1] + -1 i[ 2]) == (1 o[ 0] + [(-1)])} ]> 
+  orb_check = <[ {(1 v[ 0] + [(-1)]) * ([1] + -1 i[ 0]) == (1 o[ 0] + [(-1)])} ]> 
          
   (** -> a && b || c *)
+  andb_check = <[ {(1 i[0]) * (1 i[1]) == (1 v[ 0])} ]>
+  orb_check = <[ {(1 i[0] + [(-1)]) * ([1] + -1 v[0]) == (1 o[ 0] + [(-1)])} ]> 
+
   Theorem composition_lemma: forall e1 e2 e' r1 r2 r',
       e1 <=*=> r1 ->
       e2 <=*=> r2 ->

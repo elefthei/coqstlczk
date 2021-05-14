@@ -154,7 +154,7 @@ Module Gadget(PF: GaloisField).
   Close Scope list_scope.
   Open Scope vector_scope.
 
-  Program Definition cannonical_forms_bool_bool: forall e a b,
+  Lemma cannonical_forms_bool_bool: forall e a b,
       cannonical 2 e <{{ Bool * Bool }}> [a; b] ->
       ((e = <{ {true, true} }> /\ a = 1:%p /\ b = 1:%p) \/
        (e = <{ {true, false} }> /\ a = 1:%p /\ b = 0:%p) \/
@@ -184,6 +184,31 @@ Module Gadget(PF: GaloisField).
       e = <{ fp a }>.
   Proof. intros e a Hc; invert Hc; reflexivity. Qed.
 
+  Lemma cannonical_forms_field_bool_bool: forall e a p,
+      cannonical 3 e <{{ Field * Bool * Bool }}> [n;b;c] ->
+      ((e = <{ {fp p, true, true} }> /\ n = p /\ a = 1:%p /\ b = 1:%p) \/
+       (e = <{ {fp p, true, false} }> /\ n = p /\ a = 1:%p /\ b = 0:%p) \/
+       (e = <{ {fp p, false, true} }> /\ n = p /\ a = 0:%p /\ b = 1:%p) \/
+       (e = <{ {fp p, false, false} }> /\ n = o /\ a = 0:%p /\ b = 0:%p)).
+  (**
+  Lemma cannonical_forms_ind_prin: forall n a b f bt ts o,
+      cannonical (S (S n)) <{ {a,b} }>  <{{ Field * bt }}> (f :: ts) ->
+      e = <{ {fp f, a} }> /\ cannonical (S n) o b ts.
+  Proof.
+    intros n.
+    intros.
+    remember e as exp.
+    induction H.
+    induction n; intros; split. 
+    - destruct b; invert H; pose proof (vec1_proj v); exists_inverter;deconj; subst.
+      + pose proof (cannonical_forms_bool e0 a H5); clear H5; deconj.
+        
+    intros e b n f ts o H.
+    
+    induction H.
+    split.
+    - induction H.
+   *)
   Ltac solve_stlc :=
     repeat lazymatch goal with
            | [ |- step (tm_eq ?a ?b) _ ] =>

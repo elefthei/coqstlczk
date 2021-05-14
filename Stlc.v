@@ -416,7 +416,7 @@ Module Stlc(PF: GaloisField).
   Notation "Gamma '|-' t '::' T" := (typing Gamma t T) (in custom stlc_ty at level 40, t custom stlc, T custom stlc_ty at level 1).
   Notation "'Field'" := ty_field (in custom stlc_ty at level 0).
   Notation "'Bool'" := ty_bool (in custom stlc_ty at level 0).
-  Notation "a * b" := (ty_prod a b) (in custom stlc_ty at level 1, left associativity).
+  Notation "a * b" := (ty_prod a b) (in custom stlc_ty at level 1, right associativity).
   Notation "x + y" := (tm_binop x op_add y) (in custom stlc at level 2,
                                                 left associativity).
   Notation "x - y" := (tm_binop x op_sub y) (in custom stlc at level 2,
@@ -444,10 +444,18 @@ Module Stlc(PF: GaloisField).
                        t1 custom stlc at level 99,
                        t2 custom stlc at level 99,
                        left associativity).
-  Notation "'{' a ',' b '}'" := (tm_pair a b) (in custom stlc at level 5, right associativity).
+  Notation "'{' a ',' b '}'" := (tm_pair a b) (in custom stlc at level 4, right associativity).
+
+  Notation "{ a1 , .. , a2 , a3 }" :=
+    (tm_pair a1 .. (tm_pair a2 a3) ..)
+      (in custom stlc at level 4,
+          a1 custom stlc at level 5,
+          a2 custom stlc at level 5,
+          a3 custom stlc at level 5).
+
   Notation "'fst' a" := (tm_proj_1 a) (in custom stlc at level 5).
   Notation "'snd' a" := (tm_proj_2 a) (in custom stlc at level 5).
-  
+
   (** Equality projections *)
   Lemma eq_stlc_fp: forall n w, <{ fp n }> = <{ fp w }> <-> n = w.
   Proof.
