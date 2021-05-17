@@ -16,7 +16,7 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   
   (** syntax *)  
   Definition expvar : Set := var.
-
+  
   Inductive op : Set := 
   | op_add : op
   | op_sub : op
@@ -24,17 +24,16 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | op_div : op
   | op_and : op
   | op_or : op.
-
+  
   Inductive typ : Set := 
   | ty_bool : typ
   | ty_field : typ
-  | ty_prod (T1:typ) (T2:typ)
   | ty_arrow (T1:typ) (T2:typ).
-
+  
   Inductive constant : Set := 
   | const_bool (b5:bool)
   | const_field (n5:Fp).
-
+  
   Inductive exp : Set := 
   | tm_var_b (_:nat)
   | tm_var_f (x:expvar)
@@ -45,10 +44,7 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | tm_binop (e1:exp) (op5:op) (e2:exp)
   | tm_eq (e1:exp) (e2:exp)
   | tm_not (e:exp)
-  | tm_ifthenelse (e:exp) (e1:exp) (e2:exp)
-  | tm_pair (e1:exp) (e2:exp)
-  | tm_proj_1 (e:exp)
-  | tm_proj_2 (e:exp).
+  | tm_ifthenelse (e:exp) (e1:exp) (e2:exp).
 
   Definition typing_env : Set := list (atom*typ).
   Lemma eq_op: forall (x y : op), {x = y} + {x <> y}.
@@ -77,12 +73,12 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     decide equality; auto with ott_coq_equality arith.
   Defined.
   Hint Resolve eq_exp : ott_coq_equality.
-
+  
   (* EXPERIMENTAL *)
   (** auxiliary functions on the new list types *)
   (** library functions *)
   (** subrules *)
-  Fixpoint is_value_of_exp (e_5:exp) : bool :=
+  Definition is_value_of_exp (e_5:exp) : bool :=
     match e_5 with
     | (tm_var_b nat) => false
     | (tm_var_f x) => false
@@ -94,11 +90,8 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_eq e1 e2) => false
     | (tm_not e) => false
     | (tm_ifthenelse e e1 e2) => false
-    | (tm_pair e1 e2) => ((is_value_of_exp e1) && (is_value_of_exp e2))
-    | (tm_proj_1 e) => false
-    | (tm_proj_2 e) => false
     end.
-
+  
   (** arities *)
   (** opening up abstractions *)
   Fixpoint open_exp_wrt_exp_rec (k:nat) (e_5:exp) (e__6:exp) {struct e__6}: exp :=
@@ -113,16 +106,13 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_eq e1 e2) => tm_eq (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
     | (tm_not e) => tm_not (open_exp_wrt_exp_rec k e_5 e)
     | (tm_ifthenelse e e1 e2) => tm_ifthenelse (open_exp_wrt_exp_rec k e_5 e) (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
-    | (tm_pair e1 e2) => tm_pair (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
-    | (tm_proj_1 e) => tm_proj_1 (open_exp_wrt_exp_rec k e_5 e)
-    | (tm_proj_2 e) => tm_proj_2 (open_exp_wrt_exp_rec k e_5 e)
     end.
-
+  
   Definition open_exp_wrt_exp e_5 e__6 := open_exp_wrt_exp_rec 0 e__6 e_5.
 
   (** terms are locally-closed pre-terms *)
   (** definitions *)
-
+  
   (* defns LC_exp *)
   Inductive lc_exp : exp -> Prop :=    (* defn lc_exp *)
   | lc_tm_var_f : forall (x:expvar),
@@ -155,17 +145,7 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
       (lc_exp e) ->
       (lc_exp e1) ->
       (lc_exp e2) ->
-      (lc_exp (tm_ifthenelse e e1 e2))
-  | lc_tm_pair : forall (e1 e2:exp),
-      (lc_exp e1) ->
-      (lc_exp e2) ->
-      (lc_exp (tm_pair e1 e2))
-  | lc_tm_proj_1 : forall (e:exp),
-      (lc_exp e) ->
-      (lc_exp (tm_proj_1 e))
-  | lc_tm_proj_2 : forall (e:exp),
-      (lc_exp e) ->
-      (lc_exp (tm_proj_2 e)).
+      (lc_exp (tm_ifthenelse e e1 e2)).
   (** free variables *)
   Fixpoint fv_exp (e_5:exp) : vars :=
     match e_5 with
@@ -179,9 +159,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_eq e1 e2) => (fv_exp e1) \u (fv_exp e2)
     | (tm_not e) => (fv_exp e)
     | (tm_ifthenelse e e1 e2) => (fv_exp e) \u (fv_exp e1) \u (fv_exp e2)
-    | (tm_pair e1 e2) => (fv_exp e1) \u (fv_exp e2)
-    | (tm_proj_1 e) => (fv_exp e)
-    | (tm_proj_2 e) => (fv_exp e)
     end.
 
   (** substitutions *)
@@ -197,9 +174,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_eq e1 e2) => tm_eq (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
     | (tm_not e) => tm_not (subst_exp e_5 x5 e)
     | (tm_ifthenelse e e1 e2) => tm_ifthenelse (subst_exp e_5 x5 e) (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
-    | (tm_pair e1 e2) => tm_pair (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
-    | (tm_proj_1 e) => tm_proj_1 (subst_exp e_5 x5 e)
-    | (tm_proj_2 e) => tm_proj_2 (subst_exp e_5 x5 e)
     end.
 
 
@@ -247,17 +221,7 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | typing_let : forall (L:vars) (G:typing_env) (e1 e2:exp) (T2 T1:typ),
       typing G e1 T1 ->
       ( forall x , x \notin  L  -> typing  ((one (pair  x   T1 )) ++  G )   ( open_exp_wrt_exp e2 (tm_var_f x) )  T2 )  ->
-      typing G (tm_let e1 e2) T2
-  | typing_pair : forall (G:typing_env) (e1 e2:exp) (T1 T2:typ),
-      typing G e1 T1 ->
-      typing G e2 T2 ->
-      typing G (tm_pair e1 e2) (ty_prod T1 T2)
-  | typing_proj_1 : forall (G:typing_env) (e:exp) (T1 T2:typ),
-      typing G e (ty_prod T1 T2) ->
-      typing G (tm_proj_1 e) T1
-  | typing_proj_2 : forall (G:typing_env) (e:exp) (T2 T1:typ),
-      typing G e (ty_prod T1 T2) ->
-      typing G (tm_proj_2 e) T2.
+      typing G (tm_let e1 e2) T2.
 
   (* defns Jop *)
   Inductive step : exp -> exp -> Prop :=    (* defn step *)
@@ -352,30 +316,7 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
       step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant (const_bool  true ))
   | step_eq_neq : forall (c1 c2:constant),
       c1  <>  c2  ->
-      step (tm_eq (tm_constant c1) (tm_constant c2)) (tm_constant (const_bool  false ))
-  | step_pair_beta_1 : forall (e1 e2:exp),
-      lc_exp e2 ->
-      lc_exp e1 ->
-      step (tm_proj_1 (tm_pair e1 e2)) e1
-  | step_pair_beta_2 : forall (e1 e2:exp),
-      lc_exp e1 ->
-      lc_exp e2 ->
-      step (tm_proj_2 (tm_pair e1 e2)) e2
-  | step_proj_cog_1 : forall (e e':exp),
-      step e e' ->
-      step (tm_proj_1 e) (tm_proj_1 e')
-  | step_proj_cog_2 : forall (e e':exp),
-      step e e' ->
-      step (tm_proj_2 e) (tm_proj_2 e')
-  | step_pair_cog_1 : forall (e1 e2 e1':exp),
-      lc_exp e2 ->
-      step e1 e1' ->
-      step (tm_pair e1 e2) (tm_pair e1' e2)
-  | step_pair_cog_2 : forall (e1 e2 e2':exp),
-      lc_exp e1 ->
-      step e2 e2' ->
-      step (tm_pair e1 e2) (tm_pair e1 e2').
-
+      step (tm_eq (tm_constant c1) (tm_constant c2)) (tm_constant (const_bool  false )).
 
   (** infrastructure *)
   Hint Constructors typing step lc_exp : core.
@@ -416,7 +357,6 @@ Module Stlc(PF: GaloisField).
   Notation "Gamma '|-' t '::' T" := (typing Gamma t T) (in custom stlc_ty at level 40, t custom stlc, T custom stlc_ty at level 1).
   Notation "'Field'" := ty_field (in custom stlc_ty at level 0).
   Notation "'Bool'" := ty_bool (in custom stlc_ty at level 0).
-  Notation "a * b" := (ty_prod a b) (in custom stlc_ty at level 1, right associativity).
   Notation "x + y" := (tm_binop x op_add y) (in custom stlc at level 2,
                                                 left associativity).
   Notation "x - y" := (tm_binop x op_sub y) (in custom stlc at level 2,
@@ -444,18 +384,7 @@ Module Stlc(PF: GaloisField).
                        t1 custom stlc at level 99,
                        t2 custom stlc at level 99,
                        left associativity).
-  Notation "'{' a ',' b '}'" := (tm_pair a b) (in custom stlc at level 4, right associativity).
-
-  Notation "{ a1 , .. , a2 , a3 }" :=
-    (tm_pair a1 .. (tm_pair a2 a3) ..)
-      (in custom stlc at level 4,
-          a1 custom stlc at level 5,
-          a2 custom stlc at level 5,
-          a3 custom stlc at level 5).
-
-  Notation "'fst' a" := (tm_proj_1 a) (in custom stlc at level 5).
-  Notation "'snd' a" := (tm_proj_2 a) (in custom stlc at level 5).
-
+ 
   (** Equality projections *)
   Lemma eq_stlc_fp: forall n w, <{ fp n }> = <{ fp w }> <-> n = w.
   Proof.
@@ -477,6 +406,5 @@ Module Stlc(PF: GaloisField).
   Hint Resolve neq_stlc_fp: pk.
   
 End Stlc.
-
 
 
