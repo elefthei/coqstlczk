@@ -70,26 +70,58 @@ Module Gadget(PF: GaloisField).
   Definition normalization_lemma: forall e e', (exists G, normalizer e G = e') <-> e -->* e'.
   Admitted.  
 
+
+  Definition a(n: Fp) :=
+    <{ (\_: Field, \_: Bool, \_: Field, if #1 then #0 else #2)
+         (fp n) true false }>.
+  Check a(1:%p).
+  Set Printing All.
+  Print a.
+                                
   (** Evaluate closures *)
   Inductive fo_type: typ -> Prop :=
   | fo_field: fo_type <{{ Field }}>
   | fo_bool: fo_type <{{ Bool }}>.
 
-  Inductive r1cs_type: typ -> Prop :=
-  | ro_unary: forall t, fo_type t -> r1cs_type t
-  | ro_pair: forall t b,
-      fo_type t ->
-      r1cs_type b ->
-      r1cs_type <{{ t * b }}>.
+  Definition typed(a: Fp)(t: typ): exp :=
+    match t with
+    | <{{ Bool }}> => if eq_field a 0:%p then <{ false }> else <{ true }>
+    | _ => <{ fp a }>
+    end.
 
-  Inductive fo_exp: exp -> Fp -> Prop :=
-  | fo_fp: forall p, fo_exp <{ fp p }> p
-  | fo_true: fo_exp <{ true }> (1:%p)
-  | fo_false: fo_exp <{ false }> (0:%p).
-  
+  Import ListNotations.
+  Inductive eqv{n i v}: exp -> @r1cs (S n) (S i) v -> Prop :=
+  | Unary: forall e inps vars out cs t t',
+      fo_type t' ->
+      fo_type t ->
+      <{{ [] |- e :: (t -> t') }}> ->
+      correct cs inps out vars ->
+      (let arg := typed (hd inps) t in 
+       let res := typed out t' in
+        <{ e arg }> -->* <{ res }>) ->
+      eqv e cs
+  | Step:
+      
+      
+  Definition r1cs_lambda_equiv{n v}(e: exp)
+             (cs: @r1cs n (num_arg e) v): Prop :=
+    forall (args: exp)
+      (result: exp)
+      (inps: Vfp (num_arg e))
+      (out: Fp)
+      (vars: Vfp v)
+      t t'
+      (** axioms *)
+      (HeT: <{{ [] |- e :: (t -> t') }}>)
+      (HcannonIn: cannonical (num_arg e) args t inps)
+      (HcannonOut: cannonical (num_ret e) result t' outs),
+      (** equivalence relation *)
+      <{ e args }> -->* <{ result }> <->
+      correct cs inps outs vars.
+    
   Import VectorNotations.  
   Inductive cannonical: forall n, exp -> typ -> Vfp n -> Prop :=
-  | ev_field: forall f, cannonical 1 <{ fp f }> <{{ Field }}> [f]
+  | ev_field: forall f, cannonical 1 <{ \_: Field, f }> <{{ Field }}> [f]
   | ev_true: cannonical 1 <{ true }> <{{ Bool }}> [1:%p]
   | ev_false: cannonical 1 <{ false }> <{{ Bool }}> [0:%p]
   | ev_pair_true: forall m v e t, 
@@ -105,32 +137,74 @@ Module Gadget(PF: GaloisField).
       <{{ Datatypes.nil |- e :: t }}> ->
       cannonical (S m) <{ {fp f, e} }> <{{ Field * t }}> (f :: v).
      
+
+
+
   Local Open Scope nat_scope.
   Fixpoint num_arg(e: exp): nat :=
     match e with
-    | <{ \_: t, _}> =>
-      (fix num_telems t :=
-      match t with 
-      | <{{ Field * b }}> => 1 + num_telems b
-      | <{{ Bool * b }}> => 1 + num_telems b
-      | <{{ Field }}> => 1
-      | <{{ Bool }}> => 1
-      | _ => 0
-      end) t
+    | <{ \_: t, b}> => 1 + num_arg b
     | _ => 0
     end.
 
-  Fixpoint num_ret(e: exp): nat :=
-    match e with
-    | <{ a b }> => num_ret a
-    | <{ \_: _, b }> => num_ret b
-    | <{ {a, b} }> => 1 + num_ret b
-    | tm_binop a _ b => 1
-    | <{ fst a }> => 1
-    | <{ snd b }> => num_ret b - 1
-    | <{ if _ then a else _ }> => num_ret a
-    | _ => 1
-    end.
+  Inductive r1cs_equiv{n v}(e: exp)
+            (cs: @r1cs n (num_arg e) 1 v): Prop :=
+  | Unary: forall cs exp (inps: Vfp 1 out vars,
+      
+      <{{ [] |- e :: t -> t' }}> ->
+      <{{ [] |- args :: t }}> ->
+      <{{ [] |- result :: t' }}> ->
+      <{ e args }> -->* result ->
+      correct cs inps out vars ->
+      
+             
+  Definition r1cs_lambda_equiv{n v}(e: exp)
+             (cs: @r1cs n (num_arg e) 1 v): Prop :=
+    forall (args: exp)
+      (result: exp)
+      (inps: Vfp (num_arg e))
+      (out: Fp)
+      (vars: Vfp v)
+      t t'
+      (** axioms *)
+      (HeT: <{{ [] |- e :: (t -> t') }}>)
+      (HcannonIn: cannonical (num_arg e) args t inps)
+      (HcannonOut: cannonical (num_ret e) result t' outs),
+      (** equivalence relation *)
+      <{ e args }> -->* <{ result }> <->
+      correct cs inps outs vars.
+
+  Inductive r1cs_type: typ -> Prop :=
+  | ro_unary: forall t, fo_type t -> r1cs_type t
+  | ro_pair: forall t b,
+      fo_type t ->
+      r1cs_type b ->
+      r1cs_type <{{ t * b }}>.
+
+  Inductive fo_exp: exp -> Fp -> Prop :=
+  | fo_fp: forall p, fo_exp <{ fp p }> p
+  | fo_true: fo_exp <{ true }> (1:%p)
+  | fo_false: fo_exp <{ false }> (0:%p).
+  
+  Import VectorNotations.  
+  Inductive cannonical: forall n, exp -> typ -> Vfp n -> Prop :=
+  | ev_field: forall f, cannonical 1 <{ \_: Field, f }> <{{ Field }}> [f]
+  | ev_true: cannonical 1 <{ true }> <{{ Bool }}> [1:%p]
+  | ev_false: cannonical 1 <{ false }> <{{ Bool }}> [0:%p]
+  | ev_pair_true: forall m v e t, 
+      cannonical m e t v ->
+      <{{ Datatypes.nil |- e :: t }}> ->
+      cannonical (S m) <{ {true , e} }> <{{ Bool * t }}> (1:%p :: v)
+  | ev_pair_false: forall m v e t,
+      cannonical m e t v ->
+      <{{ Datatypes.nil |- e :: t }}> ->
+      cannonical (S m) <{ {false , e} }> <{{ Bool * t }}> (0:%p :: v)
+  | ev_pair_field: forall m f v e t,
+      cannonical m e t v ->
+      <{{ Datatypes.nil |- e :: t }}> ->
+      cannonical (S m) <{ {fp f, e} }> <{{ Field * t }}> (f :: v).
+     
+
 
   Close Scope vector_scope.
   Import ListNotations.
@@ -184,12 +258,14 @@ Module Gadget(PF: GaloisField).
       e = <{ fp a }>.
   Proof. intros e a Hc; invert Hc; reflexivity. Qed.
 
-  Lemma cannonical_forms_field_bool_bool: forall e a p,
-      cannonical 3 e <{{ Field * Bool * Bool }}> [n;b;c] ->
+  Lemma cannonical_forms_field_bool_bool: forall n e b a p,
+      cannonical 3 e <{{ Field * Bool * Bool }}> [n;a;b] ->
       ((e = <{ {fp p, true, true} }> /\ n = p /\ a = 1:%p /\ b = 1:%p) \/
        (e = <{ {fp p, true, false} }> /\ n = p /\ a = 1:%p /\ b = 0:%p) \/
        (e = <{ {fp p, false, true} }> /\ n = p /\ a = 0:%p /\ b = 1:%p) \/
-       (e = <{ {fp p, false, false} }> /\ n = o /\ a = 0:%p /\ b = 0:%p)).
+       (e = <{ {fp p, false, false} }> /\ n = p /\ a = 0:%p /\ b = 0:%p)).
+  Proof.
+    
   (**
   Lemma cannonical_forms_ind_prin: forall n a b f bt ts o,
       cannonical (S (S n)) <{ {a,b} }>  <{{ Field * bt }}> (f :: ts) ->
