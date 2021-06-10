@@ -24,15 +24,18 @@ Module Compose(PF: GaloisField).
   Include Gadget PF.
   Import ListNotations.
 
-  Inductive curry: exp -> exp -> Prop :=
-  | Curry: forall T1 T2 e, curry <{ \_: T1 * T2, e }> <{ \_: T1, \_: T2, e }>.
-
   Open Scope list_scope.  
   Inductive compose: exp -> exp -> exp -> Prop :=
   | Compose: forall T T' T'' e e',
       <{{ [] |- e :: (T -> T') }}> ->
       <{{ [] |- e' :: (T' -> T'') }}> ->
       compose e e' <{ \_: T, e' (e #0) }>.
+
+      
+      
+  (**
+      e1 . e2 -> e
+      r1 . r2 -> r     
 
   (**
      Transform lambda terms to a form ammenable to r1cs-translation

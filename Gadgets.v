@@ -1,4 +1,5 @@
 Require Import Metalib.Metatheory.
+Require Import Bool.
 From STLCZK Require Import GaloisField.
 From STLCZK Require Import Stlc.
 From STLCZK Require Import R1cs.
@@ -9,15 +10,20 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coqprime.elliptic.GZnZ.
 Require Import Coq.ZArith.Znumtheory.
 Require Import Coq.ZArith.BinIntDef.
-Import Z.
-Require Import Coq.ZArith.BinInt.
 Require Import Coq.Vectors.VectorDef.
+Require Import ExtLib.Structures.Monads.
+Require Import ExtLib.Data.Monads.StateMonad.
+
+Generalizable All Variables.
 
 Module Gadget(PF: GaloisField).
   Import PF.
   Include R1CS PF.
   Include Stlc PF.
-
+  Import MonadNotation.
+  Open Scope monad_scope.
+  Open Scope nat_scope.
+  
   (** TR closure *)
   Inductive multi {X : Type} (R : relation X) : relation X :=
   | multi_refl : forall (x : X), multi R x x
@@ -70,146 +76,145 @@ Module Gadget(PF: GaloisField).
   Definition normalization_lemma: forall e e', (exists G, normalizer e G = e') <-> e -->* e'.
   Admitted.  
 
-  (** Evaluate closures *)
   Inductive fo_type: typ -> Prop :=
-  | fo_field: fo_type <{{ Field }}>
-  | fo_bool: fo_type <{{ Bool }}>.
+  | fot_fp:  fo_type <{{ Field }}> 
+  | fot_bool: fo_type <{{ Bool }}>.
+ 
+  Inductive fo_value: exp -> typ -> Fp -> Prop :=
+  | fos_fp: forall p, fo_value <{ fp p }> <{{ Field }}> p
+  | fos_true: fo_value <{ true }> <{{ Bool }}> (1:%p)
+  | fos_false: fo_value <{ false }> <{{ Bool }}> (0:%p).
 
-  Inductive r1cs_type: typ -> Prop :=
-  | ro_unary: forall t, fo_type t -> r1cs_type t
-  | ro_pair: forall t b,
-      fo_type t ->
-      r1cs_type b ->
-      r1cs_type <{{ t * b }}>.
-
-  Inductive fo_exp: exp -> Fp -> Prop :=
-  | fo_fp: forall p, fo_exp <{ fp p }> p
-  | fo_true: fo_exp <{ true }> (1:%p)
-  | fo_false: fo_exp <{ false }> (0:%p).
-  
-  Import VectorNotations.  
-  Inductive cannonical: forall n, exp -> typ -> Vfp n -> Prop :=
-  | ev_field: forall f, cannonical 1 <{ fp f }> <{{ Field }}> [f]
-  | ev_true: cannonical 1 <{ true }> <{{ Bool }}> [1:%p]
-  | ev_false: cannonical 1 <{ false }> <{{ Bool }}> [0:%p]
-  | ev_pair_true: forall m v e t, 
-      cannonical m e t v ->
-      <{{ Datatypes.nil |- e :: t }}> ->
-      cannonical (S m) <{ {true , e} }> <{{ Bool * t }}> (1:%p :: v)
-  | ev_pair_false: forall m v e t,
-      cannonical m e t v ->
-      <{{ Datatypes.nil |- e :: t }}> ->
-      cannonical (S m) <{ {false , e} }> <{{ Bool * t }}> (0:%p :: v)
-  | ev_pair_field: forall m f v e t,
-      cannonical m e t v ->
-      <{{ Datatypes.nil |- e :: t }}> ->
-      cannonical (S m) <{ {fp f, e} }> <{{ Field * t }}> (f :: v).
-     
-  Local Open Scope nat_scope.
-  Fixpoint num_arg(e: exp): nat :=
-    match e with
-    | <{ \_: t, _}> =>
-      (fix num_telems t :=
-      match t with 
-      | <{{ Field * b }}> => 1 + num_telems b
-      | <{{ Bool * b }}> => 1 + num_telems b
-      | <{{ Field }}> => 1
-      | <{{ Bool }}> => 1
-      | _ => 0
-      end) t
-    | _ => 0
-    end.
-
-  Fixpoint num_ret(e: exp): nat :=
-    match e with
-    | <{ a b }> => num_ret a
-    | <{ \_: _, b }> => num_ret b
-    | <{ {a, b} }> => 1 + num_ret b
-    | tm_binop a _ b => 1
-    | <{ fst a }> => 1
-    | <{ snd b }> => num_ret b - 1
-    | <{ if _ then a else _ }> => num_ret a
-    | _ => 1
-    end.
-
-  Close Scope vector_scope.
   Import ListNotations.
-  Definition r1cs_lambda_equiv{n v}(e: exp)
-             (cs: @r1cs n (num_arg e) (num_ret e) v): Prop :=
-    forall (args: exp)
-      (result: exp)
-      (inps: Vfp (num_arg e))
-      (outs: Vfp (num_ret e))
-      (vars: Vfp v) t t'
-      (** axioms *)
-      (HeT: <{{ [] |- e :: (t -> t') }}>)
-      (HcannonIn: cannonical (num_arg e) args t inps)
-      (HcannonOut: cannonical (num_ret e) result t' outs),
-      (** equivalence relation *)
-      <{ e args }> -->* <{ result }> <->
-      correct cs inps outs vars.
+  Local Open Scope list_scope.
 
-  Notation "e <=*=> r" := (r1cs_lambda_equiv e r) (at level 50).
+  Inductive r1cs_equiv: forall i v, exp -> @r1cs i v -> Prop :=
+  | BaseTrue: forall e v (r: @r1cs 0 v) (vars: Vfp v),
+      <{ e }> -->* <{ true }> ->
+      correct r (Vector.nil Fp) vars (1:%p) ->
+      r1cs_equiv 0 v e r
+  | BaseFalse: forall v e (r: @r1cs 0 v) (vars: Vfp v),
+      <{ e }> -->* <{ false }> ->
+      correct r (Vector.nil _) vars (0:%p) ->
+      r1cs_equiv 0 v e r
+  | BaseField: forall v e (r: @r1cs 0 v) (vars: Vfp v) p,
+      <{ e }> -->* <{ fp p }> ->
+      correct r (Vector.nil _) vars p ->
+      r1cs_equiv 0 v e r
+  | Step: forall v i e (r: @r1cs (S i) v) t t' (vars: Vfp v),
+      <{{ [] |- e :: (t -> t') }}> ->
+      fo_type t ->
+      (forall (inputs: Vfp (S i)) arg,
+          fo_value arg t (hd inputs) ->
+          r1cs_equiv (S i-1) v <{ e arg }> (substitute_r1cs r (hd inputs))) -> 
+      r1cs_equiv (S i) v e r.
+
+  Arguments r1cs_equiv {i} {v}.
+  Notation "e <=*=> r" := (r1cs_equiv e r) (at level 50).
+
+  Fixpoint max_closed(m:nat)(e: exp): nat :=
+    match e with
+    | tm_var_b n => Nat.max m n
+    | tm_let e1 e2 => Nat.max (max_closed m e1) (max_closed m e2)
+    | tm_binop e1 _ e2 => Nat.max (max_closed m e1) (max_closed m e2)
+    | tm_eq e1 e2 => Nat.max (max_closed m e1) (max_closed m e2)
+    | tm_not e => max_closed m e
+    | tm_ifthenelse e e1 e2 =>
+      Nat.max (max_closed m e) (Nat.max (max_closed m e1) (max_closed m e2))
+    | _ => m
+    end.
+
   
-  Close Scope list_scope.
-  Open Scope vector_scope.
+  Fixpoint letfix(e: exp): state nat exp :=
+    _ <- put (S (max_closed 0%nat e)) ;;
+    match e with
+    | tm_abs t e =>
+      e' <- letfix e ;;
+      ret (tm_abs t e')
+    | tm_app e1 e2 =>
+      e1' <- letfix e1 ;;
+      e2' <- letfix e2 ;;
+      ret (tm_app e1' e2')
+    | tm_let e1 e2 =>
+      e1' <- letfix e1 ;;
+      e2' <- letfix e2 ;;
+      ret (tm_let e1' e2')
+    | tm_binop e1 op e2 =>
+      e1' <- letfix e1 ;;
+      e2' <- letfix e2 ;;
+      m <- get ;;
+      _ <- put (S m) ;;
+      ret <{ let {tm_binop e1' op e2'} in {tm_var_b (S m)} }>
+    | tm_ifthenelse e e1 e2 =>
+      e' <- letfix e ;;
+      e1' <- letfix e1 ;;
+      e2' <- letfix e2 ;;
+      m <- get ;;
+      _ <- put (S m) ;;
+      ret <{ let (if e' then e1' else e2') in {tm_var_b m} }>
+    | tm_not e =>
+      e' <- letfix e ;;
+      m <- get ;;
+      _ <- put (S m) ;;
+      ret <{ let {tm_not e'} in {tm_var_b m} }>
+    | tm_eq e1 e2 =>
+      e1' <- letfix e1 ;;
+      e2' <- letfix e2 ;;
+      m <- get ;;
+      _ <- put (S m) ;;
+        ret <{ let {tm_eq e1' e2'} in {tm_var_b m} }>
+    | _ => ret e
+    end.
 
-  Lemma cannonical_forms_bool_bool: forall e a b,
-      cannonical 2 e <{{ Bool * Bool }}> [a; b] ->
-      ((e = <{ {true, true} }> /\ a = 1:%p /\ b = 1:%p) \/
-       (e = <{ {true, false} }> /\ a = 1:%p /\ b = 0:%p) \/
-       (e = <{ {false, true} }> /\ a = 0:%p /\ b = 1:%p) \/
-       (e = <{ {false, false} }> /\ a = 0:%p /\ b = 0:%p)).
-  Proof.
-    intros e a b Hc.
-    invert Hc; invert H4; devec1 v; invert H3; invert H. 
-    - left; intuition auto.
-    - right; left; intuition auto.      
-    - right; right; left; intuition auto.
-    - right; right; right; intuition auto.
-  Qed.
+  Eval cbn in (evalState (letfix
+                          <{ \_: Bool, \_: Bool,
+                                           #0 && #1 || #0 }>) (0%nat)). 
 
-  Lemma cannonical_forms_bool: forall e a,
-      cannonical 1 e <{{ Bool }}> [a] ->
-      ((e = <{ true }> /\ a = 1:%p) \/ (e = <{ false }> /\ a = 0:%p)).
-  Proof.
-    intros e a Hc.
-    invert Hc. 
-    - left; split; reflexivity.
-    - right; split; reflexivity.
-  Qed.
+  (** e: <{{ G |- e :: Field -> Field -> Field }}> 
+      <{ \_: Field, \_: Field, let #0 + #1 in #0 }>
+      num_inputs: 2,
+      num_vars: 1
 
-  Lemma cannonical_forms_field: forall e a,
-      cannonical 1 e <{{ Field }}> [a] ->
-      e = <{ fp a }>.
-  Proof. intros e a Hc; invert Hc; reflexivity. Qed.
+    e: <{{ G |- e :: Bool -> Field -> Field -> Field }}> 
+      <{ \_: Field, \_: Field, let #0 + #1 in #0 }>
+      num_inputs: 2,
+      num_vars: 1
 
-  Lemma cannonical_forms_field_bool_bool: forall e a p,
-      cannonical 3 e <{{ Field * Bool * Bool }}> [n;b;c] ->
-      ((e = <{ {fp p, true, true} }> /\ n = p /\ a = 1:%p /\ b = 1:%p) \/
-       (e = <{ {fp p, true, false} }> /\ n = p /\ a = 1:%p /\ b = 0:%p) \/
-       (e = <{ {fp p, false, true} }> /\ n = p /\ a = 0:%p /\ b = 1:%p) \/
-       (e = <{ {fp p, false, false} }> /\ n = o /\ a = 0:%p /\ b = 0:%p)).
-  (**
-  Lemma cannonical_forms_ind_prin: forall n a b f bt ts o,
-      cannonical (S (S n)) <{ {a,b} }>  <{{ Field * bt }}> (f :: ts) ->
-      e = <{ {fp f, a} }> /\ cannonical (S n) o b ts.
-  Proof.
-    intros n.
-    intros.
-    remember e as exp.
-    induction H.
-    induction n; intros; split. 
-    - destruct b; invert H; pose proof (vec1_proj v); exists_inverter;deconj; subst.
-      + pose proof (cannonical_forms_bool e0 a H5); clear H5; deconj.
-        
-    intros e b n f ts o H.
+  Definition fo_compile(e: exp): @r1cs (num_inputs e) (num_vars e) :=
+    match e with
+    | <{ if a then b else c }> =>  <[ { (1i[0]) * (1i[2] + -1i[1]) == (1v + -1i[1]) } ]>.
     
-    induction H.
-    split.
-    - induction H.
-   *)
-  Ltac solve_stlc :=
+  Fixpoint compile(e: exp) : (@r1cs (num_inputs e) (num_vars e) * var e) :=
+    match e with
+    | <{\_: t, e }> =>
+    | <{ let a in b }> =>
+      let (ra, va) := compile a in
+        let (rb, vb) := compile b in
+        (r1cs_compose va ra rb, vb)
+    | <{ if a then b else c }> =>
+      let (ra, va) := compile a in
+      let (rb, vb) := compile b in
+      let (rc, vc) := compile c in
+      let vd := fresh in
+      
+      (<[ { (1va) * (1vc + -1vb) == (1vd + -1vb) } ]>, vd)
+
+*)
+        
+  (** Useful Ltac scripts *)
+  Ltac beta :=
+    eapply step_beta;
+    solve [
+        econstructor
+      | repeat lazymatch goal with
+               | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+                 idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+               | [ |- lc_exp <{ \_ : _, _ }> ] =>
+                 idtac "empty binders"; apply (lc_tm_abs empty); intros
+               end
+      | repeat econstructor]; repeat econstructor.
+
+    Ltac solve_stlc :=
     repeat lazymatch goal with
            | [ |- step (tm_eq ?a ?b) _ ] =>
              apply step_eq_refl || apply step_eq_cog_1 || apply step_eq_cog_2
@@ -229,32 +234,20 @@ Module Gadget(PF: GaloisField).
            | [ |- _ -->* _ ] => idtac "forward -->*" ; econstructor; fail
            end.
 
-  Ltac beta :=
-    eapply step_beta;
-    solve [
-        econstructor
-      | repeat lazymatch goal with
-               | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
-                 idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
-               | [ |- lc_exp <{ \_ : _, _ }> ] =>
-                 idtac "empty binders"; apply (lc_tm_abs empty); intros
-               end
-      | repeat econstructor]; repeat econstructor.
-  
   Ltac invert_types :=
     lazymatch goal with
-           | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
-             idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
-           | [ H: context[open_exp_wrt_exp _ _] |- _] => cbn in H
-           | [ H: ?a |- ?a ] => exact H
-           | [H: <{{ ?G |- ?e :: ?t }}> |- _] => idtac "TYPE" t; inversion H; subst; clear H
-           | [H: binds ?x ?t ?G |- _] => idtac "TYPE BINDS" t; inversion H; subst; clear H
-           | [H: (?x, ?t) = (?x, ?t') |- _] => match type of t with
-                                             | typ => idtac "TYPE EQ"; inversion H; clear H
-                                             end
-           | [H: List.In (?x, ?t) ?L |- _] => match type of t with
-                                            | typ => idtac "TYPE ENV"; inversion H; clear H
-                                            end
+    | [ H: ?x `notin` ?L |- lc_exp <{ \_: _, _ }> ] =>
+      idtac "intro binders"; apply (lc_tm_abs (AtomSetImpl.add ?x ?L)); intros
+    | [ H: context[open_exp_wrt_exp _ _] |- _] => cbn in H
+    | [ H: ?a |- ?a ] => exact H
+    | [H: <{{ ?G |- ?e :: ?t }}> |- _] => idtac "TYPE" t; inversion H; subst; clear H
+    | [H: binds ?x ?t ?G |- _] => idtac "TYPE BINDS" t; inversion H; subst; clear H
+    | [H: (?x, ?t) = (?x, ?t') |- _] => match type of t with
+                                      | typ => idtac "TYPE EQ"; inversion H; clear H
+                                      end
+    | [H: List.In (?x, ?t) ?L |- _] => match type of t with
+                                     | typ => idtac "TYPE ENV"; inversion H; clear H
+                                     end
     end.
 
   Ltac step_handler P H :=
@@ -264,11 +257,9 @@ Module Gadget(PF: GaloisField).
     | <{ if ?c then _ else _ }> => idtac "ite"; inversion H; clear H
     | tm_binop ?a ?x ?b => idtac a x b; inversion H; clear H
     | <{ \_ : ?t, ?b }> => idtac "abs \_: " t "," b; inversion H; clear H
-    | <{ {?a, ?b} }> => idtac "pair {" a "," b "}"; inversion H; clear H
-    | <{ fst ?a }> => idtac "fst {" a "}"; inversion H; clear H
-    | <{ snd ?a }> => idtac "snd {" a "}"; inversion H; clear H
     | ?e => idtac "NO MATCH" e; fail 2
     end; subst.
+  
   
   Ltac invert_stlc :=
     lazymatch goal with
@@ -280,5 +271,16 @@ Module Gadget(PF: GaloisField).
     | [ H: ?f -->* ?b |- _] => idtac f "-->*" b; step_handler f H
     end.
 
-
+  
+  Ltac typer :=
+    lazymatch goal with
+    | [|- <{{ _ |- <{ \_ : _, _ }> :: _}}>] => eapply typing_abs; intros; cbn
+    | [|- <{{ _ |- <{ if _ then _ else _ }> :: _ }}>] => eapply typing_if; constructor; cbn
+    | [|- (?x, ?T) = (?x, ?T) \/ _] => left; reflexivity
+    | [|- _ \/ (?x, ?T) = (?x, ?T) ] => right; reflexivity
+    | [|- _ \/ (?x1, ?T1) = (?x2, ?T2) ] => left
+    | [|- (?x1, ?T1) = (?x2, ?T2) \/ _ ] => right
+    | [|- uniq _ ] => repeat constructor; eassumption
+    end.
+  
 End Gadget.     

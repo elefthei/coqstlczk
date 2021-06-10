@@ -329,16 +329,14 @@ Module Stlc(PF: GaloisField).
 
   Coercion tm_var_f: expvar >-> exp.
   Coercion tm_constant: constant >-> exp.
-
   Declare Custom Entry stlc_ty.
   Declare Custom Entry stlc.
   
-  Notation "'fp' n" := (const_field n) (in custom stlc at level 0).
-  Notation "'fb' b" := (const_bool b) (in custom stlc at level 0).
-  Notation "'F0'" := (const_field 0:%p) (in custom stlc at level 0).
-  Notation "'F1'" := (const_field 1:%p) (in custom stlc at level 0).
-  Notation "'true'" := (const_bool true) (in custom stlc at level 0).
-  Notation "'false'" := (const_bool false) (in custom stlc at level 0).
+  Notation "'fp' n" := (tm_constant (const_field n)) (in custom stlc at level 0).
+  Notation "'true'"  := true (at level 1).
+  Notation "'true'" := (tm_constant (const_bool true)) (in custom stlc at level 0).
+  Notation "'false'"  := false (at level 1).
+  Notation "'false'" := (tm_constant (const_bool false)) (in custom stlc at level 0).
   Notation "<{ e }>" := e (e custom stlc at level 99).
   Notation "<{{ e }}>" := e (e custom stlc_ty at level 99).
   Notation "( x )" := x (in custom stlc, x at level 99).

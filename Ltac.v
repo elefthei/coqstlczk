@@ -68,3 +68,6 @@ Ltac deconj :=
          | [H: _ /\ _ |- _ ] => invert H
          | [H: _ \/ _ |- _ ] => invert H
          end.
+
+Ltac depcbnpk :=
+  repeat (cbn; try rewrite <- Eqdep.Eq_rect_eq.eq_rect_eq; autorewrite with pk; cbn).
