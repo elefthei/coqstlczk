@@ -25,124 +25,187 @@ Module BoolGadget(PF: GaloisField).
 
   (** 1. Logical And  *)
   Definition andb :=
-    <{ \_: Bool * Bool,
-           (fst #0) && (snd #0) }>. 
+    <{ \_: Bool, \_: Bool,
+           #0 && #1 }>. 
 
   Definition andb_check :=
-    <[ { (1i[0]) * (1i[1]) == (1o[0]) } ]>.  
+    <[ { (1i[0]) * (1i[1]) == (1o) } ]>.  
 
   (** Equivalence proof over r1cs *)
   Theorem and_equiv_r1cs:
     andb <=*=> andb_check.
-  Proof.    
-    unfold r1cs_lambda_equiv, andb, andb_check.
-    intros.
-    cbn in vars, inps, outs, HcannonIn, HcannonOut.
-    unfold correct, correct_lt.
-    split; intros HPrem;
-      invert HeT; cbn in H1; pick fresh x for L; specialize (H1 x Fr); invert H1;
-        repeat invert_types; subst;
-          pose proof (vec2_proj inps); exists_inverter; deconj;
-            pose proof (vec1_proj outs); exists_inverter; deconj; subst;
-              pose proof (cannonical_forms_bool_bool args a b HcannonIn) as HcasesIn;
-              pose proof (cannonical_forms_bool result a0 HcannonOut) as HcasesOut;
-              clear HcannonIn HcannonOut.
-    - (** Backwards reasoning *)
-      deconj; econstructor; cbn; try constructor.
-      + now autorewrite with pk using trivial.
-      + now repeat invert_stlc.
-      + now repeat invert_stlc.
-      + now repeat invert_stlc.
-      + now repeat invert_stlc.
-      + now autorewrite with pk using trivial.
-      + now autorewrite with pk using trivial.
-      + now autorewrite with pk using trivial.
-    - (** Forward reasoning *)      
-      invert HPrem; deconj; cbn in H2; autorewrite with pk in H2.
-      + now repeat (try econstructor; try beta).
-      + now invert H2; apply mod_0_neq_min_1 in H0; contradiction.
-      + now invert H2; apply mod_0_neq_min_1 in H0; contradiction.
-      + now invert H2; apply mod_0_neq_min_1 in H0; contradiction.
-      + now invert H2; symmetry in H0; apply mod_0_neq_1 in H0; contradiction.
-      + now repeat (try econstructor; try beta).
-      + now repeat (try econstructor; try beta).
-      + now repeat (try econstructor; try beta).
-        Unshelve.        
-        exact empty.
-        exact empty.
-        exact empty.
-        exact empty.
+  Proof.
+    unfold andb, andb_check.
+    eapply Step. 
+    - exact [].
+    - econstructor.
+      intros x H. 
+      econstructor.
+      intros; cbn. 
+      econstructor; repeat econstructor; eassumption.
+    - constructor.
+    - (** This is the assumption that quantifies over inputs *)
+      intros.
+      pose proof (vec2_proj inputs); exists_inverter; invert H.
+      + eapply Step. 
+        * now exact [].
+        * apply typing_app with (T1:=<{{ Bool }}>).
+          econstructor.
+          intros; cbn.
+          econstructor.
+          intros; cbn.
+          apply typing_boolop; repeat econstructor; eassumption.
+          now econstructor.
+        * now econstructor.
+        * intros.
+          pose proof (vec1_proj inputs); exists_inverter; invert H.
+          -- (** Eq_rect axiom *)
+             depcbnpk.
+             apply BaseTrue with (vars:=[]).
+             ++ now repeat (econstructor; try beta).
+             ++ unfold correct; cbn; constructor; depcbnpk.
+                ** now reflexivity.
+                ** now constructor.
+          -- (** Eq_rect axiom *)
+            depcbnpk.            
+            apply BaseFalse with (vars:=[]).
+            ++ now repeat (econstructor; try beta).
+            ++ unfold correct; cbn; constructor; depcbnpk.
+                ** now reflexivity.
+                ** now constructor.
+      + econstructor.
+        * now exact [].
+        * apply typing_app with (T1:=<{{ Bool }}>).
+          econstructor.
+          intros; cbn.
+          econstructor.
+          intros; cbn.
+          apply typing_boolop; repeat econstructor; eassumption.
+          now econstructor.
+        * now econstructor.
+        * intros.
+          pose proof (vec1_proj inputs); exists_inverter; invert H.
+          -- (** Eq_rect axiom *)
+             depcbnpk.
+             apply BaseFalse with (vars:=[]).
+             ++ now repeat (econstructor; try beta).
+             ++ unfold correct; cbn; constructor; depcbnpk.
+                ** now reflexivity.
+                ** now constructor.
+          -- (** Eq_rect axiom *)
+            depcbnpk.            
+            apply BaseFalse with (vars:=[]).
+            ++ now repeat (econstructor; try beta).
+            ++ unfold correct; cbn; constructor; depcbnpk.
+                ** now reflexivity.
+                ** now constructor.
+    Unshelve.        
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
   Qed.
 
-  (** 2: Logical Or *)
+  (** 1. Logical Or  *)
   Definition orb :=
-    <{ \_: Bool * Bool,
-           (fst #0) || (snd #0) }>. 
+    <{ \_: Bool, \_: Bool,
+           #0 || #1 }>. 
 
   (** (X1 − 1) · (1 − X2) + 1 − Y1 = 0 *)
   Definition orb_check :=
-    <[ { (1i[0] + [-1]) * ([1] + -1i[1]) == (1o[0] + [-1]) } ]>.
+    <[ { (1i[0] + [-1]) * ([1] + -1i[1]) == (1o + [-1]) } ]>.
 
   (** Second equivalence proof over r1cs *)
   Theorem or_equiv_r1cs:
     orb <=*=> orb_check.
   Proof.    
-    unfold r1cs_lambda_equiv, orb, orb_check.
-    intros.
-    cbn in vars, inps, outs, HcannonIn, HcannonOut.
-    unfold correct, correct_lt.
-    split; intros HPrem;
-      invert HeT; cbn in H1; pick fresh x for L; specialize (H1 x Fr); invert H1;
-        repeat invert_types; subst;
-          pose proof (vec2_proj inps); exists_inverter; deconj;
-            pose proof (vec1_proj outs); exists_inverter; deconj; subst;
-              pose proof (cannonical_forms_bool_bool args a b HcannonIn) as HcasesIn;
-              pose proof (cannonical_forms_bool result a0 HcannonOut) as HcasesOut;
-              clear HcannonIn HcannonOut; destruct (F_R FTH).
-    - (** Backwards reasoning *)
-      deconj; econstructor; cbn; try constructor.
-      + now autorewrite with pk; rewrite Rmul_zero_r; reflexivity.
-      + autorewrite with pk; rewrite Rmul_zero_r; rewrite Radd_0_l;
-        autorewrite with pk using trivial.
-      + now autorewrite with pk; rewrite Rmul_zero_r; reflexivity.
-      + now repeat invert_stlc. 
-      + now repeat invert_stlc.
-      + now repeat invert_stlc.
-      + now repeat invert_stlc.
-      + now autorewrite with pk; rewrite Rmul_zero_r; autorewrite with pk using trivial.
-    - (** Forward reasoning *)
-      invert HPrem; deconj; cbn in H2; autorewrite with pk in H2.
-      + now repeat (try econstructor; try beta).
+    unfold orb, orb_check.
+    eapply Step. 
+    - exact [].
+    - econstructor.
+      intros x H. 
+      econstructor.
+      intros; cbn. 
+      econstructor; repeat econstructor; eassumption.
+    - constructor.
+    - (** This is the assumption that quantifies over inputs *)
+      intros.
+      pose proof (vec2_proj inputs); exists_inverter; invert H.
+      + eapply Step. 
+        * now exact [].
+        * apply typing_app with (T1:=<{{ Bool }}>).
+          econstructor.
+          intros; cbn.
+          econstructor.
+          intros; cbn.
+          apply typing_boolop; repeat econstructor; eassumption.
+          now econstructor.
+        * now econstructor.
+        * intros.
+          pose proof (vec1_proj inputs); exists_inverter; invert H.
+          -- (** Eq_rect axiom *)
+             depcbnpk.
+             apply BaseTrue with (vars:=[]).
+             ++ now repeat (econstructor; try beta).
+             ++ unfold correct, correct_lt; constructor; depcbnpk.
+                ** now reflexivity.
+                ** now constructor.
+          -- (** Eq_rect axiom *)
+            depcbnpk.            
+            apply BaseTrue with (vars:=[]).
+            ++ now repeat (econstructor; try beta).
+            ++ unfold correct, correct_lt; constructor; depcbnpk.
+                ** now reflexivity.
+                ** now constructor.
       + econstructor.
-        apply step_beta; repeat constructor; econstructor; try intros; econstructor.
-        econstructor.
-        econstructor.
-        econstructor.
-        econstructor.
-        cbn. 
-        econstructor.
-        apply step_binop_cog_1; repeat econstructor.        
-        now econstructor; repeat constructor.
-      + now repeat (try econstructor; try beta).
-      + now autorewrite with pk in H2;
-          rewrite Rmul_zero_r in H2;
-          autorewrite with pk in H2; invert H2; apply mod_0_neq_min_1 in H0; contradiction.
-      + now autorewrite with pk in H2;
-          rewrite Rmul_zero_r in H2; rewrite Radd_0_l in H2;
-            symmetry in H2; invert H2; apply mod_0_neq_1 in H0; contradiction.
-      + now autorewrite with pk in H2;
-          rewrite Rmul_zero_r in H2; rewrite Radd_0_l in H2;
-            autorewrite with pk in H2; symmetry in H2; invert H2; apply mod_0_neq_1 in H0;
-              contradiction.
-      + now autorewrite with pk in H2;
-          rewrite Rmul_zero_r in H2; rewrite Radd_0_l in H2; symmetry in H2;
-            invert H2; apply mod_0_neq_1 in H0; contradiction.
-      + now repeat (try econstructor; try beta).
-        Unshelve.
-        exact empty.
-        exact empty.
-        exact empty.
-        exact empty.
+        * now exact [].
+        * apply typing_app with (T1:=<{{ Bool }}>).
+          econstructor.
+          intros; cbn.
+          econstructor.
+          intros; cbn.
+          apply typing_boolop; repeat econstructor; eassumption.
+          now econstructor.
+        * now econstructor.
+        * intros.
+          pose proof (vec1_proj inputs); exists_inverter; invert H.
+          -- (** Eq_rect axiom *)
+             depcbnpk.
+             apply BaseTrue with (vars:=[]).
+             ++ now repeat (econstructor; try beta).
+             ++ unfold correct, correct_lt; constructor; depcbnpk.
+                ** rewrite Rmul_zero_r.
+                   now reflexivity.
+                ** now constructor.
+          -- (** Eq_rect axiom *)
+            depcbnpk.            
+            apply BaseFalse with (vars:=[]).
+            ++ now repeat (econstructor; try beta).
+            ++ unfold correct, correct_lt; constructor; depcbnpk.
+                ** rewrite Rmul_zero_r. autorewrite with pk. now reflexivity.
+                ** now constructor.
+    Unshelve.        
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
+    exact empty.
   Qed.
+
 
 End BoolGadget.     
