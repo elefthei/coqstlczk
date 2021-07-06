@@ -1,6 +1,8 @@
 Require Import Metalib.Metatheory.
 From STLCZK Require Import GaloisField.
 From STLCZK Require Import Ltac.
+From STLCZK Require Import NonEmpty.
+From Coq Require Import micromega.Lia.
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.Numbers.BinNums.
 Require Import Coqprime.elliptic.GZnZ.
@@ -11,84 +13,82 @@ Import Z.
 Require Import Coq.Init.Nat.
 Require Import Coq.Vectors.VectorDef.
 Require Import Coq.Vectors.Fin.
-Require Import Coq.micromega.Lia.
 
 Set Implicit Arguments.
 Set Printing Implicit.
-Set Transparent Obligations.
 
 Module R1CS(PF: GaloisField).
   Import PF.
   Import VectorNotations.
-  Import ListNotations.
- 
   Definition Vfp := Vector.t Fp.
+
+  Inductive term: Set :=
+  | input(n: nat): term
+  | var(n: nat): term
+  | output: term
+  | one: term.
+
+  Local Open Scope nat_scope.
   
-  Class Computable a := {
-    (** With more inputs/vars *)
-    eval_lt{i v i' v'}(circ: a i v)(inputs: Vfp i')(vars: Vfp v')(out: Fp): i <= i' -> v <= v' -> list Fp;
+  Definition term_eq(a b: term): bool :=
+    match a,b with
+    | input n, input n' => n =? n'
+    | var n, var n' => n =? n'
+    | output, output => true
+    | one, one => true
+    | _, _ => false
+    end.  
+                                 
+  Definition additions :=
+    NonEmpty (Fp*term).
+  
+  Inductive constraint: Set :=
+  | lc (A: additions) (B: additions) (C: additions).
+
+  Definition r1cs :=
+    NonEmpty constraint.
+
+  Class Computable(A : Type)(R: Type) :=
+    {
+    (** Substitute input i[n] with given term, i[S n] -> i[n] *)
+    subst: A -> nat -> term -> A;
+
+    rewrite: A -> term -> term -> A;
     
-    (** With exact inputs/vars *)
-    eval{i v}(circ: a i v)(inputs: Vfp i)(vars: Vfp v)(out: Fp): list Fp :=
-      eval_lt circ inputs vars out (Nat.le_refl i)(Nat.le_refl v);
+    (** Get number of free inputs *)
+    num_inputs: A -> nat;
     
-    (** Substitute the 0th input with val *)
-    substitute{i v}(circ: a i v)(val: Fp): a (i-1)%nat v;
+    (** Get number of free vars *)
+    num_vars: A -> nat;
 
-    (** Does it sum to zero *)
-    correct{i v}(circ: a i v)(inputs: Vfp i)(vars: Vfp v)(out: Fp): Prop :=
-      let values := eval circ inputs vars out in
-      List.Forall (fun v => v = 0:%p) values
-                                       }.
+    (** Shift inputs right by n *)
+    shift_inputs: A -> nat -> A;
 
-  (** R1CS language definition *)
-  Inductive term: nat -> nat -> Set :=
-  | input(m: Fp): forall (n: nat), term (S n) 0
-  | output(m: Fp): term 0 0
-  | var(m: Fp): forall (n: nat), term 0 (S n)
-  | one(m: Fp): term 0 0.
+    (** Shift vars right by n *)
+    shift_vars: A -> nat -> A;
 
-  Inductive additions: nat -> nat -> Type :=
-  | ahead: forall i v, term i v -> additions i v
-  | atail: forall i v i' v',
-      term i v ->
-      additions i' v' ->
-      additions (max i i') (max v v').
+    (* Well-formed *)
+    wf: A -> Prop;
+    
+    (** Evaluate to a number *)
+    eval{i v}(a: A):
+                     num_inputs a <= i ->
+                     num_vars a <= v -> 
+                     Vfp i ->
+                     Vfp v ->
+                     Fp ->
+                     R;
+    
+    }.
   
-  Inductive constraint: nat -> nat -> Type :=
-  | lc: forall i v i' v' i'' v''
-      (A: additions i v)
-      (B: additions i' v')
-      (C: additions i'' v''),
-      constraint (max i (max i' i'')) (max v (max v' v'')).
-
-  Inductive r1cs: nat -> nat -> Type :=
-  | rhead: forall i v, constraint i v -> r1cs i v
-  | rtail: forall i v i' v',
-      constraint i v ->
-      r1cs i' v' ->
-      r1cs (max i i') (max v v').
-  
-  Arguments additions {i} {v}.
-  Arguments ahead {i} {v}.
-  Arguments atail {i} {v} {i'} {v'}.
-  Arguments constraint {i} {v}.
-  Arguments lc {i} {v} {i'} {v'} {i''} {v''}.
-  Arguments rhead {i} {v}.
-  Arguments rtail {i} {v} {i'} {v'}.
-  Arguments r1cs {i} {v}.
-  
-  Definition r1cs_singleton{i v}(c: @constraint i v) :=
-    rhead c.
-
   (** syntax *)
   Declare Custom Entry r1cs.
 
   Notation "<[ a ]>" :=
-    (rhead a) (at level 1, a custom r1cs at level 2).
+    (@NE_Sing constraint a) (at level 1, a custom r1cs at level 2).
   
   Notation "<[ a1 ; .. ; a2 ; a3 ]>" :=
-    (rtail a1 .. (rtail a2 (rhead a3)) ..)
+    (@NE_Cons constraint a1 .. (@NE_Cons constraint a2 (@NE_Sing constraint a3)) ..)
       (at level 1,
        a1 custom r1cs at level 2,
        a2 custom r1cs at level 2,
@@ -103,179 +103,271 @@ Module R1CS(PF: GaloisField).
           left associativity).
 
   Notation "( a )" :=
-    (ahead a) (in custom r1cs at level 3, a custom r1cs at level 4).
+    (@NE_Sing (Fp*term) a) (in custom r1cs at level 3, a custom r1cs at level 4).
   
   Notation "( a1 + .. + a2 + a3 )" :=
-    (atail a1 .. (atail a2 (ahead a3)) ..)
+    (@NE_Cons (Fp*term) a1 .. (@NE_Cons (Fp*term) a2 (@NE_Sing (Fp*term) a3)) ..)
       (in custom r1cs at level 3,
           a1 custom r1cs at level 4,
           a2 custom r1cs at level 4,
           a3 custom r1cs at level 4).
   
   Notation "z 'i[' n ']'" :=
-    (input (to_p z) n%nat)
+    ((to_p z), input n%nat)
       (in custom r1cs at level 4,
           n constr,
           z constr).
   
   Notation "z 'o'" :=
-    (output (to_p z))
+    ((to_p z), output)
       (in custom r1cs at level 4,
           z constr).
   
   Notation "z 'v[' n ']'" :=
-    (var (to_p z) n%nat)
+    ((to_p z), var n%nat)
       (in custom r1cs at level 4,
           n constr,
           z constr).
 
   Notation "[ z ]" :=
-    (one (to_p z))
+    ((to_p z), one)
       (in custom r1cs at level 4,
           z constr at level 0).
 
+  Definition r1cs_singleton(c: constraint): r1cs :=
+    NE_Sing c.
+ 
   Coercion r1cs_singleton: constraint >-> r1cs.
+
   Eval cbn in <[
                 { (3o + 3i[1]) * (3i[0] + 2v[2]) == ([1]) };
-              { (3o + 3i[1]) * (3i[0] + 2v[2]) == ([1]) }  ]>.   
+              { (3o + 3i[1]) * (3i[0] + 2v[2]) == ([1]) }  ]>.  
 
+  Lemma Nat_max_lub_if: forall n m p : nat, Nat.max n m <= p -> n <= p /\ m <= p.
+  Proof. intros. split; lia. Defined.
 
-  Fixpoint eval_additions{i v i' v'}
-           (adds: @additions i v)
-           (inputs: Vfp i')
-           (vars: Vfp v')
-           (output: Fp): i <= i' -> v <= v' -> Fp.
-    invert adds; intros.
-    - invert H.
-      + apply le_lt_Sn_m in H0.
-        exact (pkmul m (Vector.nth inputs (Fin.of_nat_lt H0))).  (** Fp * Input term *)
-      + exact (pkmul m output). (** Fp * Output term *)
-      + apply le_lt_Sn_m in H1.
-        exact (pkmul m (Vector.nth vars (Fin.of_nat_lt H1))).    (** Fp * Var term *)
-      + exact m. (** Fp * 1 (One) term *)
-    - specialize (eval_additions _ _ _ _ H0 inputs vars output) as Hprev.
-      pose proof (Nat.max_lub_r _ _ _ H1).
-      pose proof (Nat.max_lub_r _ _ _ H2).
-      pose proof (Nat.max_lub_l _ _ _ H1).
-      pose proof (Nat.max_lub_l _ _ _ H2).
-      clear H1 H2.
-      invert H.
-      + apply le_lt_Sn_m in H5.
-        exact (pkplus (Hprev H3 H4) (pkmul m (Vector.nth inputs (Fin.of_nat_lt H5)))).
-      + exact (pkplus (Hprev H3 H4) (pkmul m output)).
-      + apply le_lt_Sn_m in H6.
-        exact (pkplus (Hprev H3 H4) (pkmul m (Vector.nth vars (Fin.of_nat_lt H6)))).
-      + exact (pkplus (Hprev H3 H4) m).
-  Defined.
-
-  
-  Fixpoint eval_constraint{i v i' v'}
-           (ctr: @constraint i v)
-           (inputs: Vfp i')
-           (vars: Vfp v')
-           (output: Fp): i <= i' -> v <= v' -> Fp.
-    invert ctr.
-    intros.
-    pose proof (Nat.max_lub_r _ _ _ H).
-    pose proof (Nat.max_lub_r _ _ _ H0).
-    pose proof (Nat.max_lub_r _ _ _ H1).
-    pose proof (Nat.max_lub_l _ _ _ H).
-    pose proof (Nat.max_lub_l _ _ _ H0).
-    pose proof (Nat.max_lub_l _ _ _ H1).
-    pose proof (Nat.max_lub_r _ _ _ H2).
-    pose proof (Nat.max_lub_l _ _ _ H2).
-    clear H H0 H1 H2.
-    pose proof (eval_additions A inputs vars output H4 H5) as SumA.
-    pose proof (eval_additions B inputs vars output H6 H8) as SumB.
-    pose proof (eval_additions C inputs vars output H3 H7) as SumC.
-    exact (pksub (pkmul SumA SumB) SumC). (** A * B - C *)
-  Defined.
-  
-  Fixpoint eval_fix{i v i' v'}
-           (r: @r1cs i v)
-           (inputs: Vfp i')
-           (vars: Vfp v')
-           (output: Fp) : i <= i' -> v <= v' -> list Fp.
-  Proof.
-    intros.
-    invert r.
-    - pose proof (eval_constraint H1 inputs vars output H H0) as Hhead.
-      exact [Hhead]%list.
-    - pose proof (Nat.max_lub_r _ _ _ H).
-      pose proof (Nat.max_lub_l _ _ _ H).
-      pose proof (Nat.max_lub_r _ _ _ H0).
-      pose proof (Nat.max_lub_l _ _ _ H0).
-      pose proof (eval_fix _ _ _ _ H2 inputs vars output H3 H5) as Hprev.
-      pose proof (eval_constraint H1 inputs vars output H4 H6) as CtrEval.
-      exact (CtrEval :: Hprev)%list.
-  Defined.
-
-  (** Substitute [v / inp[1]], and [inp[n] / inp[S n]] *)
-
-  Definition substitute_inp{i v}(a: @term i v)(n: Fp): @term (i-1) v :=
-    match a in (@term n v) return (@term (n-1) v) with
-    | input m 0 => one (pkmul m n)
-    | input m (S a) => input m a
-    | output m => output m
-    | var m n => var m n
-    | one m => one m
-    end.
-
-  Program Fixpoint substitute_additions{i v}(a: @additions i v)(inp: Fp): @additions (i-1) v :=
-    match a with
-    | ahead h => ahead (substitute_inp h inp)
-    | atail h ts => atail (substitute_inp h inp) (substitute_additions ts inp)
-    end.
-  Next Obligation. apply Nat.sub_max_distr_r. Defined.
-
-  Program Fixpoint substitute_constraint{i v}(ctr: @constraint i v)(v: Fp) :=
-    match ctr in @constraint i v return (@constraint (i-1) v) with
-    | lc a b c =>
-      lc (substitute_additions a v) (substitute_additions b v) (substitute_additions c v)
-    end.
-  Next Obligation. rewrite Nat.sub_max_distr_r; apply Nat.sub_max_distr_r. Defined.
-
-  Program Fixpoint substitute_r1cs{i v}(r: @r1cs i v)(k: Fp): @r1cs (i-1) v :=
-    match r with
-    | rhead c => rhead (substitute_constraint c k)
-    | rtail h ts => rtail (substitute_constraint h k) (substitute_r1cs ts k)
-    end.
-  Next Obligation. apply Nat.sub_max_distr_r. Defined.
-
-  (** Use those as the public interface to r1cs *)
-  Instance Computable_additions: Computable (@additions) :=
+  #[refine] Instance term_Computable: Computable term Fp :=
     {
-    eval_lt{i v i' v'}(circ: @additions i v)(inputs: Vfp i')(vars: Vfp v')(out: Fp) :=
-      fun Hi Hv => [ @eval_additions i v i' v' circ inputs vars out Hi Hv]%list;
+    subst t n k :=
+      match t with
+      | input n' => match compare n n' with
+                     | Eq => k
+                     | Gt => t
+                     | Lt => input (n' -1)
+                     end
+      | _ => t
+      end;
 
-    substitute := @substitute_additions
-    }.
-
-  Instance Computable_constraint: Computable (@constraint) :=
-    {
-    eval_lt{i v i' v'}(circ: @constraint i v)(inputs: Vfp i')(vars: Vfp v')(out: Fp) :=
-      fun Hi Hv => [ @eval_constraint i v i' v' circ inputs vars out Hi Hv]%list;
+      rewrite trm t t' := if term_eq t trm then t' else
+                            match t, trm with
+                            | input a, input b => if a <? b then input (b-1) else trm
+                            | var a, var b => if a <? b then var (b-1) else trm
+                            | _, _ => trm
+                            end;
     
-    substitute := @substitute_constraint
+    num_inputs t :=
+        match t with
+        | input n => S n
+        | _ => 0%nat
+        end;
+
+    shift_inputs t n :=
+          match t with
+          | input n' => input (n + n')
+          | _ => t
+          end;
+          
+    shift_vars t n :=
+          match t with
+          | var n' => var (n + n')
+          | _ => t
+          end;
+           
+    num_vars t :=
+            match t with
+            | var n => S n
+            | _ => 0%nat
+            end;
+
+    wf := fun _ => True
     }.
-  
-  Instance Computable_r1cs: Computable (@r1cs) :=
+  intros i v a Hi Hv inps vars out; destruct a eqn:Ha.
+  - exact (Vector.nth inps (Fin.of_nat_lt Hi)).
+  - exact (Vector.nth vars (Fin.of_nat_lt Hv)).
+  - exact out.
+  - exact (1:%p).
+  Defined.
+
+  #[refine] Instance additions_Computable: Computable additions Fp :=
     {
-    eval_lt := @eval_fix;
-    
-    substitute := @substitute_r1cs
+    subst t n k := NE_map (fun p => match p with
+                                 | (f, x) => (f, subst x n k)
+                                 end) t;
+
+    rewrite a t t' := NE_map (fun p => match p with
+                                    | (f, x) => (f, rewrite x t t')
+                                    end) a;
+    num_inputs t :=
+      NE_max (NE_map (fun p => match p with
+                            | (f, x) => num_inputs x
+                            end) t);
+
+    num_vars t :=
+        NE_max (NE_map (fun p => match p with
+                              | (f, x) => num_vars x
+                              end) t); 
+
+    shift_inputs t n :=
+          NE_map (fun p => match p with
+                        | (f, x) => (f, shift_inputs x n)
+                        end) t; 
+        
+    shift_vars t n :=
+            NE_map (fun p => match p with
+                          | (f, x) => (f, shift_vars x n)
+                          end) t;
+    wf a := True; 
     }.
-  
+  intros i v a; induction a; intros Hi Hv inps vars out.
+  - rewrite NE_map_sing in Hi, Hv.
+    apply NE_max_sing in Hi.
+    apply NE_max_sing in Hv.
+    destruct a.
+    exact (pkmul f (eval t Hi Hv inps vars out)).
+  - rewrite NE_map_cons in Hi, Hv.
+    destruct a.
+    remember (num_inputs t) as ih.
+    remember (NE_map (fun p => match p with
+                            | (f, t) => num_inputs t
+                            end) a0) as its.
+    remember (num_vars t) as vh.
+    remember (NE_map (fun p => match p with
+                            | (f, t) => num_vars t
+                            end) a0) as vts.
+    apply NE_max_cons in Hv; destruct Hv.
+    apply NE_max_cons in Hi; destruct Hi.
+    rewrite Heqvh in H.
+    rewrite Heqih in H1.
+    exact (pkplus
+             (IHa H2 H0 inps vars out)
+             (pkmul f (eval t H1 H inps vars out))).
+  Defined.
+
+  #[refine] Instance constraint_Computable: Computable constraint Fp :=
+    {
+    subst t n k :=
+      match t with lc a b c => lc (subst a n k) (subst b n k) (subst c n k) end;
+
+    rewrite c t t' :=
+      match c with lc a b c => lc (rewrite a t t') (rewrite b t t') (rewrite c t t') end;
+        
+    num_inputs t :=
+      match t with lc a b c => max (num_inputs a) (max (num_inputs b) (num_inputs c)) end;
+                
+    num_vars t :=
+      match t with lc a b c => max (num_vars a) (max (num_vars b) (num_vars c)) end;
+
+    shift_inputs t n :=
+      match t with lc a b c => lc (shift_inputs a n) (shift_inputs b n) (shift_inputs c n) end;
+
+    shift_vars t n :=
+      match t with lc a b c => lc (shift_vars a n) (shift_vars b n) (shift_vars c n) end;
+        
+     wf a := True
+    }.
+  intros i v a H H0 inps vars out; destruct a eqn:Ha; subst.
+  destruct (Nat_max_lub_if _ _ H); clear H.
+  destruct (Nat_max_lub_if _ _ H0); clear H0.
+  destruct (Nat_max_lub_if _ _ H2); clear H2.
+  destruct (Nat_max_lub_if _ _ H3); clear H3.
+  pose proof (eval A H1 H inps vars out) as RA.
+  pose proof (eval B H0 H2 inps vars out) as RB.
+  pose proof (eval C H4 H5 inps vars out) as RC.
+  exact (pksub (pkmul RA RB) RC).
+  Defined.
+
+  #[refine] Instance r1cs_Computable: Computable r1cs Prop :=
+    {
+    subst t n k := NE_map (fun x => subst x n k) t;
+
+    rewrite r t t' := NE_map (fun x => rewrite x t t') r;
+                                      
+    num_inputs t :=
+      NE_max (NE_map num_inputs t);
+        
+    num_vars t :=
+        NE_max (NE_map num_vars t); 
+    shift_inputs t n :=
+        NE_map (fun x => shift_inputs x n) t; 
+        
+    shift_vars t n :=
+        NE_map (fun x => shift_vars x n) t;
+          
+    wf a := True
+    }.
+  intros i v a; induction a; intros Hi Hv inps vars out.
+  - rewrite NE_map_sing in Hi, Hv.
+    apply NE_max_sing in Hi.
+    apply NE_max_sing in Hv.
+    exact (eval a Hi Hv inps vars out = 0:%p).
+  - rewrite NE_map_cons in Hi, Hv.
+    apply NE_max_cons in Hi.
+    apply NE_max_cons in Hv.
+    destruct Hi.
+    destruct Hv.
+    exact (IHa H0 H2 inps vars out /\ eval a H H1 inps vars out = 0:%p).
+  Defined.
+
+  Definition correct(r: r1cs)
+             (inputs: Vfp (num_inputs r))
+             (output: Fp)
+             (vars: Vfp (num_vars r)): Prop :=
+    @eval r1cs Prop r1cs_Computable
+     (@num_inputs r1cs Prop r1cs_Computable r)
+     (@num_vars r1cs Prop r1cs_Computable r)
+     r
+     (Nat.le_refl (@num_inputs r1cs Prop r1cs_Computable r))
+     (Nat.le_refl (@num_vars r1cs Prop r1cs_Computable r))
+     inputs
+     vars
+     output.     
+
+  Import VectorNotations.
+  Unset Printing Implicit.
+
   Lemma example_correct1:
-    correct <[ { (1i[0]) * (1i[1]) == (1o) } ]> [1:%p; 1:%p] [] (1:%p).
+    correct <[ { (1i[0]) * (1i[1]) == (1o) } ]> [1:%p; 1:%p] 1:%p [].
   Proof.
     unfold correct.
     cbn.
-    constructor.
-    destruct FTH.
-    inversion F_R.
-    - autorewrite with pk using trivial.
-    - constructor.
-  Defined.
+    autorewrite with pk using trivial.
+  Qed.
+
+  (** Take the left circuit,
+      make its output o, the nth input of the second circuit:
+
+      @r1cs i v -> @r1cs i' v' -> @r1cs (i +i' -1) (v + v' +1) 
+   *)
+  Definition compose(a: r1cs)(b: r1cs)(n: nat): r1cs :=
+    let b_nvars := num_vars b in
+    let a_nvars := num_vars a in
+    let cvar := var (b_nvars + a_nvars) in
+    NE_app (
+        rewrite 
+          (shift_vars
+             (shift_inputs a (num_inputs b - 1))
+             b_nvars
+          ) output cvar)
+           (rewrite b (input n) cvar).
+
+  Eval cbn in rewrite (<[ {(1 i[ 0]) * (1 i[ 1]) == (1 o)} ]>) (input 0) output.
+  Eval cbn in 
+    compose
+      (<[ {(1 i[ 0]) * (1 i[ 1]) == (1 o)} ]>)                   (* andb i[0] i[1] *)
+      (<[ { (1i[0] + [-1]) * ([1] + -1i[1]) == (1o + [-1]) } ]>) (* orb i[0] i[1] *)
+      1.
+
+  Definition WF_inputs{i v}(r: r1cs)(inputs: Vfp i)(vars: Vfp v) :=
+    num_vars r = v /\ num_inputs r  = i.    
 
 End R1CS.
