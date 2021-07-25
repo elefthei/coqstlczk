@@ -6,8 +6,6 @@ From Coq Require Import micromega.Lia.
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.Numbers.BinNums.
 Require Import Coqprime.elliptic.GZnZ.
-Require Import ExtLib.Data.Monads.StateMonad.
-Require Import ExtLib.Structures.Monads.
 Require Import Coq.ZArith.BinIntDef.
 Import Z.
 Require Import Coq.Init.Nat.
@@ -371,3 +369,18 @@ Module R1CS(PF: GaloisField).
     num_vars r = v /\ num_inputs r  = i.    
 
 End R1CS.
+
+(*
+Section phoas.
+  Variable var: Type.
+
+  Inductive exp: Type :=
+  | Var: var -> exp
+  | Abs: (var -> exp) -> exp
+  | App: exp -> exp -> exp.
+
+End phoas.
+
+Definition Exp: Type := forall v: Type, exp v.
+*)
+  

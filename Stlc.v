@@ -34,7 +34,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | const_bool (b5:bool)
   | const_field (n5:Fp).
 
-  (* exp -> anfexp -> (normalization) -> anfexp *)
   Inductive exp : Set := 
   | tm_var_b (_:nat)
   | tm_var_f (x:expvar)
@@ -405,5 +404,3 @@ Module Stlc(PF: GaloisField).
   Hint Resolve neq_stlc_fp: pk.
   
 End Stlc.
-
-

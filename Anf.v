@@ -167,7 +167,7 @@ Module Anf(PF: GaloisField).
         end in
     let (defs, ans) := translate_helper e in
     make_lets defs ans.
-
+ 
   Definition foo :=
     <{ \_: Bool,
            let #0 && #0 in
@@ -181,7 +181,7 @@ Module Anf(PF: GaloisField).
      }>.
              
     Compute anf_translate bar.
-
+    Compute anf_translate foo.
 End Anf.
       
         
