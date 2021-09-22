@@ -4,6 +4,7 @@ From STLCZK Require Import GaloisField.
 From STLCZK Require Import Stlc.
 From STLCZK Require Import R1cs.
 From STLCZK Require Import Ltac.
+From STLCZK Require Import Relations.
 
 From Coq Require Import Vectors.VectorDef.
 From Coq Require Import Init.Nat.
@@ -17,20 +18,18 @@ Module Anf(PF: GaloisField).
   Import ListNotations.
   Local Open Scope nat_scope.
   
-  Inductive anfexp : Set :=
+  Inductive anfexp: Set :=
   | Let(l: aexp)(e: anfexp)
   | Value(v: value)
   with value: Set :=
-  | CField(f: Fp)
+  | Constant(c: constant)
   | Var_f(s: var)
-  | CBoolean(b: bool)
   | Var_b(v: nat)
-  | Lambda(e: anfexp)
+  | Lambda(e: anfexp) (** How to remove this? *)
   with aexp: Set :=
   | App(f: value)(v: value)
   | Select(c: value)(t: value)(e: value)
   | Primop(o: op) (l: value) (r: value)
-  | Eq(l: value)(r: value)
   | Not(l: value).
 
   Fixpoint subst_anfexp(e: anfexp)(n: nat)(val: value): anfexp :=
@@ -53,11 +52,10 @@ Module Anf(PF: GaloisField).
          | Primop o l r => Primop o
                                  (subst_value l v val)
                                  (subst_value r v val)
-         | Eq l r => Eq (subst_value l v val)
-                       (subst_value r v val)
          | Not l => Not (subst_value l v val)
          end.
 
+    
   Fixpoint shift_aexp(e: aexp)(v: nat): aexp :=
     match e with
     | App f a => App (shift_value f v) (shift_value a v)
@@ -83,37 +81,53 @@ Module Anf(PF: GaloisField).
          | o => o
          end.
   
-  Fixpoint binders_aexp(e: aexp): list nat :=
-    match e with
-    | App f a => binders_value f ++ binders_value a
-    | Select c t e => binders_value c ++ binders_value t ++ binders_value e
-    | Primop o l r => binders_value l ++ binders_value r
-    | Eq l r => binders_value l ++ binders_value r
-    | Not l => binders_value l
-    end
-  with binders_anfexp(e: anfexp): list nat :=
-    match e with
-    | Let l e => binders_aexp l ++ binders_anfexp e
-    | Value v => binders_value v
-    end
-  with binders_value(e: value): list nat :=
-         match e with
-         | Var_b b => [b]
-         | o => []
-         end.
-
   Definition shift(n: nat)(l: list aexp): list aexp :=
     map (fun e => shift_aexp e n) l.
   
-  Definition max_binder(e: list aexp): nat :=
-    list_max (flat_map binders_aexp e).
+  Inductive aexpstep: aexp -> anfexp -> Prop :=
+  | AAppBeta: forall e v,
+      aexpstep (App (Lambda e) v) (subst_anfexp e 0 v)
+  | ASelectTrue: forall a b,
+      aexpstep (Select (Constant (const_bool true)) a b) (Value a)
+  | ASelectFalse: forall a b,
+      aexpstep (Select (Constant (const_bool false)) a b) (Value b)
+  | APrimop: forall o a b ans,
+      op_helper o a b ans ->
+      aexpstep (Primop o (Constant a) (Constant b)) (Value (Constant ans))
+  | ANot: forall b,
+      aexpstep (Not (Constant (const_bool b))) (Value (Constant (const_bool (negb b)))).
+      
+   (* a = y := (fun x => let z = x + 3 in z) 7
+      a' = z := 7 + 3
+      e' = z      
+      e = y
+    *)       
+  Inductive astep: anfexp -> anfexp -> Prop :=
+  | ALetStep: forall a e' e,
+      aexpstep a (Let a' e') ->
+      astep (Let a e) (Let a' (Let a (shift_anfexp e 1)) 
+  | ALetValue: forall a v,
+      aexstep a (Value v) ->
+      astep (Let a e) (subst_anfexp e 0 v)
+  | ALetCong1: forall a a' e,
+      astep a a' ->
+      astep (Let a e) (Let a' e)
+  | ALetCong2: forall a e e',
+      astep e e' ->
+      astep (Let a e) (Let a e')
 
+
+  
   Fixpoint substitute(n: nat)(v: value)(l: list aexp): list aexp :=
     match l with
     | [] => []
     | h :: ts => subst_aexp h n v :: substitute (S n) (shift_value v 1) ts
     end.
-  
+
+  Inductive anfstep: anfexp -> anfexp -> Prop :=
+  | LetStep: forall a next,
+      
+      anfstep (Let a next)
   Fixpoint anf_translate (e: exp): anfexp :=
     let fix make_lets(l: list aexp)(v: value): anfexp :=
         match l with

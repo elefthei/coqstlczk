@@ -23,7 +23,8 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | op_mul : op
   | op_div : op
   | op_and : op
-  | op_or : op.
+  | op_or : op
+  | op_eq: op.
   
   Inductive typ : Set := 
   | ty_bool : typ
@@ -42,7 +43,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | tm_let (e1:exp) (e2:exp)
   | tm_constant (constant5:constant)
   | tm_binop (e1:exp) (op5:op) (e2:exp)
-  | tm_eq (e1:exp) (e2:exp)
   | tm_not (e:exp)
   | tm_ifthenelse (e:exp) (e1:exp) (e2:exp).
 
@@ -87,7 +87,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_let e1 e2) => false
     | (tm_constant constant5) => (true)
     | (tm_binop e1 op5 e2) => false
-    | (tm_eq e1 e2) => false
     | (tm_not e) => false
     | (tm_ifthenelse e e1 e2) => false
     end.
@@ -103,7 +102,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_let e1 e2) => tm_let (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec (S k) e_5 e2)
     | (tm_constant constant5) => tm_constant constant5
     | (tm_binop e1 op5 e2) => tm_binop (open_exp_wrt_exp_rec k e_5 e1) op5 (open_exp_wrt_exp_rec k e_5 e2)
-    | (tm_eq e1 e2) => tm_eq (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
     | (tm_not e) => tm_not (open_exp_wrt_exp_rec k e_5 e)
     | (tm_ifthenelse e e1 e2) => tm_ifthenelse (open_exp_wrt_exp_rec k e_5 e) (open_exp_wrt_exp_rec k e_5 e1) (open_exp_wrt_exp_rec k e_5 e2)
     end.
@@ -134,10 +132,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
       (lc_exp e1) ->
       (lc_exp e2) ->
       (lc_exp (tm_binop e1 op5 e2))
-  | lc_tm_eq : forall (e1 e2:exp),
-      (lc_exp e1) ->
-      (lc_exp e2) ->
-      (lc_exp (tm_eq e1 e2))
   | lc_tm_not : forall (e:exp),
       (lc_exp e) ->
       (lc_exp (tm_not e))
@@ -156,7 +150,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_let e1 e2) => (fv_exp e1) \u (fv_exp e2)
     | (tm_constant constant5) => {}
     | (tm_binop e1 op5 e2) => (fv_exp e1) \u (fv_exp e2)
-    | (tm_eq e1 e2) => (fv_exp e1) \u (fv_exp e2)
     | (tm_not e) => (fv_exp e)
     | (tm_ifthenelse e e1 e2) => (fv_exp e) \u (fv_exp e1) \u (fv_exp e2)
     end.
@@ -171,14 +164,33 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
     | (tm_let e1 e2) => tm_let (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
     | (tm_constant constant5) => tm_constant constant5
     | (tm_binop e1 op5 e2) => tm_binop (subst_exp e_5 x5 e1) op5 (subst_exp e_5 x5 e2)
-    | (tm_eq e1 e2) => tm_eq (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
     | (tm_not e) => tm_not (subst_exp e_5 x5 e)
     | (tm_ifthenelse e e1 e2) => tm_ifthenelse (subst_exp e_5 x5 e) (subst_exp e_5 x5 e1) (subst_exp e_5 x5 e2)
     end.
 
 
   (** definitions *)
+  Definition booleqb(a b: bool): bool :=
+    match a, b with
+    | true, true => true
+    | false, false => true
+    | _, _ => false
+    end.
 
+  Definition op_helper(o: op)(a b: constant): constant -> Prop :=
+    match o, a, b with
+    | op_add, const_field a, const_field b => fun e => e = const_field (pkplus a b)
+    | op_sub, const_field a, const_field b => fun e => e = const_field (pksub a b)
+    | op_mul, const_field a, const_field b => fun e => e = const_field (pkmul a b)
+    | op_div, const_field a, const_field b => fun e => b <> 0:%p -> e = const_field (pkdiv a b)
+    | op_and, const_bool a, const_bool b => fun e => e = const_bool (andb a b)
+    | op_or, const_bool a, const_bool b => fun e => e = const_bool (orb a b)
+    | op_eq, const_bool a, const_bool b => fun e => e = const_bool (booleqb a b)
+    | op_eq, const_field a, const_field b => fun e => e = const_bool
+                                                        (if eq_field a b then true else false)
+    | _, _, _ => fun e => False
+    end.      
+    
   (* defns Jtyping *)
   Inductive typing : typing_env -> exp -> typ -> Prop :=    (* defn typing *)
   | typing_var : forall (G:typing_env) (x:expvar) (T:typ),
@@ -209,10 +221,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
       typing G e1 ty_field ->
       typing G e2 ty_field ->
       typing G (tm_binop e1 op5 e2) ty_field
-  | typing_eqop : forall (G:typing_env) (e1 e2:exp) (T:typ),
-      typing G e1 T ->
-      typing G e2 T ->
-      typing G (tm_eq e1 e2) ty_bool
   | typing_if : forall (G:typing_env) (e e1 e2:exp) (T:typ),
       typing G e ty_bool ->
       typing G e1 T ->
@@ -256,30 +264,6 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
       step (tm_not (tm_constant (const_bool  true ))) (tm_constant (const_bool  false ))
   | step_not_false : 
       step (tm_not (tm_constant (const_bool  false ))) (tm_constant (const_bool  true ))
-  | step_and_1 : forall (e:exp),
-      lc_exp e ->
-      step  ( (tm_binop e op_and (tm_constant (const_bool  true ))) )  e
-  | step_and_2 : forall (e:exp),
-      lc_exp e ->
-      step  ( (tm_binop (tm_constant (const_bool  true )) op_and e) )  e
-  | step_and_3 : forall (e:exp),
-      lc_exp e ->
-      step  ( (tm_binop e op_and (tm_constant (const_bool  false ))) )  (tm_constant (const_bool  false ))
-  | step_and_4 : forall (e:exp),
-      lc_exp e ->
-      step  ( (tm_binop (tm_constant (const_bool  false )) op_and e) )  (tm_constant (const_bool  false ))
-  | step_or_1 : forall (e1:exp),
-      lc_exp e1 ->
-      step  ( (tm_binop e1 op_or (tm_constant (const_bool  true ))) )  (tm_constant (const_bool  true ))
-  | step_or_2 : forall (e1:exp),
-      lc_exp e1 ->
-      step  ( (tm_binop (tm_constant (const_bool  true )) op_or e1) )  (tm_constant (const_bool  true ))
-  | step_or_3 : forall (e1:exp),
-      lc_exp e1 ->
-      step  ( (tm_binop e1 op_or (tm_constant (const_bool  false ))) )  e1
-  | step_or_4 : forall (e1:exp),
-      lc_exp e1 ->
-      step  ( (tm_binop (tm_constant (const_bool  false )) op_or e1) )  e1
   | step_let_v : forall (e2 v1:exp),
       Is_true (is_value_of_exp v1) ->
       lc_exp (tm_let v1 e2) ->
@@ -296,27 +280,9 @@ Module Stlc_Ott(Import PF: GaloisField.GaloisField).
   | step_binop_cog_2 : forall (c1:constant) (op5:op) (e2 e2':exp),
       step e2 e2' ->
       step (tm_binop (tm_constant c1) op5 e2) (tm_binop (tm_constant c1) op5 e2')
-  | step_add_const : forall (n1 n2:Fp),
-      step (tm_binop (tm_constant (const_field n1)) op_add (tm_constant (const_field n2))) (tm_constant (const_field  (pkplus  n1   n2 ) ))
-  | step_sub_const : forall (n1 n2:Fp),
-      step (tm_binop (tm_constant (const_field n1)) op_sub (tm_constant (const_field n2))) (tm_constant (const_field  (pksub  n1   n2 ) ))
-  | step_mul_const : forall (n1 n2:Fp),
-      step (tm_binop (tm_constant (const_field n1)) op_mul (tm_constant (const_field n2))) (tm_constant (const_field  (pkmul  n1   n2 ) ))
-  | step_div_const : forall (n1 n2:Fp),
-      (const_field n2)  <>  (const_field  0:%p )  ->
-      step (tm_binop (tm_constant (const_field n1)) op_div (tm_constant (const_field n2))) (tm_constant (const_field  (pkdiv  n1   n2 ) ))
-  | step_eq_cog_1 : forall (e1 e2 e1':exp),
-      lc_exp e2 ->
-      step e1 e1' ->
-      step (tm_eq e1 e2) (tm_eq e1' e2)
-  | step_eq_cog_2 : forall (c1:constant) (e2 e2':exp),
-      step e2 e2' ->
-      step (tm_eq (tm_constant c1) e2) (tm_eq (tm_constant c1) e2')
-  | step_eq_refl : forall (c:constant),
-      step (tm_eq (tm_constant c) (tm_constant c)) (tm_constant (const_bool  true ))
-  | step_eq_neq : forall (c1 c2:constant),
-      c1  <>  c2  ->
-      step (tm_eq (tm_constant c1) (tm_constant c2)) (tm_constant (const_bool  false )).
+  | step_op_const : forall (c1 c2 ans: constant)(o: op),
+      op_helper o c1 c2 ans ->
+      step (tm_binop (tm_constant c1) o (tm_constant c2)) (tm_constant ans).
 
   (** infrastructure *)
   Hint Constructors typing step lc_exp : core.
@@ -367,7 +333,7 @@ Module Stlc(PF: GaloisField).
                                                  left associativity).
   Notation "x || y" := (tm_binop x op_or y) (in custom stlc at level 4,
                                                 left associativity).
-  Notation "x == y" := (tm_eq x y) (in custom stlc at level 3,
+  Notation "x == y" := (tm_binop x op_eq y) (in custom stlc at level 3,
                                        left associativity).
   Notation "! x " := (tm_not x) (in custom stlc at level 3).
 
