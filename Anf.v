@@ -32,6 +32,10 @@ Module Anf(PF: GaloisField).
   | Primop(o: op) (l: value) (r: value)
   | Not(l: value).
 
+  Scheme anfexp_mut := Induction for anfexp Sort Prop
+    with value_mut := Induction for value Sort Prop
+    with aexp_mut := Induction for aexp Sort Prop.
+  
   Fixpoint subst_anfexp(e: anfexp)(n: nat)(val: value): anfexp :=
     match e with
     | Let l e => Let (subst_aexp l n val) (subst_anfexp e n val)
