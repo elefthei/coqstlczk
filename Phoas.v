@@ -1,4 +1,3 @@
-Require Import Bool.
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coqprime.elliptic.ZEll.
 Require Import Coq.ZArith.Znumtheory.
@@ -30,7 +29,36 @@ Module Stlc(Import PF: GaloisField.GaloisField).
   Notation "'Num'" := TNum (in custom stlc_ty at level 0).
   Notation "'Bool'" := TBool (in custom stlc_ty at level 0).
 
+  (** This is STLC PHOAS syntax [Term] without control flow,
+      it includes normalization by evaluation using reify/reflect as seen in Oliver Danvy et al.
+      As reification of Coq terms [if _ then _ else _] is impossible without
+      meta-programming, we develop a meta-language [IM] that reifies control-flow, then
+      commute with reify/reflect on STLC with our meta-language.
+      
+      We get the following commutative square for *reflect*
+
+
+                                  ireflect
+      IM (Term typeDenote) t ----------------> IM typeDenote t
+             |                                       | 
+             |                                       |
+             |                                       |
+             v                    reflect            v
+          Term typeDenote t  -----------------> typeDenote t
+
+
+      And the following for *reify*
+      
+                        reify
+      typeDenote t  -------------> Term typeDenote t
+             |                             | 
+             | RET                         | RET
+             |                             |
+             v            ireify           v
+      IM typeDenote t  ----------------> IM (Term typeDenote) t
+   *)
   Section vars.
+    (** This is how to get reflected Coq terms *)
     Variable var : type -> Type.
 
     Inductive Term: type -> Type :=
@@ -47,8 +75,6 @@ Module Stlc(Import PF: GaloisField.GaloisField).
     | AND: Term <{{ Bool }}> -> Term <{{ Bool }}> -> Term <{{ Bool }}>
     | OR: Term <{{ Bool }}> -> Term <{{ Bool }}> -> Term <{{ Bool }}>
     | NOT: Term <{{ Bool }}> -> Term <{{ Bool }}>
-    (* Control flow *)
-    | ITE: forall t, Term <{{ Bool }}> -> Term t -> Term t -> Term t
     (* Lambda *)
     | APP: forall a b, Term <{{ a -> b }}> -> Term a -> Term b
     | VAR: forall a, var a -> Term a
@@ -68,12 +94,29 @@ Module Stlc(Import PF: GaloisField.GaloisField).
                           }.
 
     Instance Nbe_lam {a b: type} `{Nbe a} `{Nbe b}: Nbe <{{ a -> b }}> := {
-      reify v := 
-        LAM (fun x => reify (v (reflect (VAR x))));
-      reflect e :=
-        fun x => reflect (APP e (reify x))
+      reify v := LAM (fun x => reify (v (reflect (VAR x))));        
+      reflect e :=  fun x => reflect (APP e (reify x))
                                                                         }.
   End vars.
+
+  (** This is the metalanguage with if-then-else. I am defining another
+      [T: type -> Type] because I want to be able to reflect terms in stages,
+      first in Terms and then in IM.
+
+      This allows us to have both Terms and IM Terms reified,
+      using [IM (Term typeDenote) t] and object terms reflected while
+      meta-terms remain reified using [IM typeDenote t]. This is a handy
+      trick for staged compilation of meta-languages! *)
+  Section mvars.
+
+    Variable T: type -> Type.
+    Inductive IM: type -> Type :=
+    | ITE: forall t, Term typeDenote <{{ Bool }}> ->
+                IM t ->
+                IM t ->
+                IM t
+    | RET: forall t, T t -> IM t.
+  End mvars.
 
   Arguments VAR [var a].
   Arguments NUM {var}.
@@ -92,7 +135,10 @@ Module Stlc(Import PF: GaloisField.GaloisField).
   Arguments Nbe_lam {var} {a} {b}.
   Arguments reify {var} {t}.
   Arguments reflect {var} {t}.
-
+  (** Meta terms *)
+  Arguments ITE {T t}.
+  Arguments RET {T t}.
+  
   Declare Custom Entry stlc.
   Notation "'fp' n" := (NUM n) (in custom stlc at level 0).
   Notation "'true'"  := true (at level 1).
@@ -132,7 +178,7 @@ Module Stlc(Import PF: GaloisField.GaloisField).
                     x custom stlc at level 99,
                     y custom stlc at level 99,
                     z custom stlc at level 99,
-                    left associativity).
+                    left associativity).  
   
   Fixpoint termDenote t (e : Term typeDenote t) {struct e} : typeDenote t :=
     match e in (Term _ t) return (typeDenote t) with
@@ -144,7 +190,10 @@ Module Stlc(Import PF: GaloisField.GaloisField).
     | MUL f1 f2 => pkmul (termDenote f1) (termDenote f2)
     | DIV f1 f2 => pkdiv (termDenote f1) (termDenote f2)
     | EQ f1 f2 => if eq_field (termDenote f1) (termDenote f2) then true else false
-    | ITE c t e => if (termDenote c) then termDenote t else termDenote e
+    (** Commuting conversion if/app *)
+    (* | @ITE _ <{{ a -> b }}> c t e =>
+      fun y => if (termDenote c) then (termDenote t) y else (termDenote e) y
+    | ITE c t e => if (termDenote c) then termDenote t else termDenote e *)
     | AND b1 b2 => andb (termDenote b1) (termDenote b2)
     | OR b1 b2 => orb (termDenote b1) (termDenote b2)
     | NOT b => negb (termDenote b)
@@ -152,6 +201,13 @@ Module Stlc(Import PF: GaloisField.GaloisField).
     | LAM e' => fun x => termDenote (e' x)
     end.
 
+
+  Fixpoint mtermDenote t (e: IM (Term typeDenote) t) : typeDenote t :=
+    match e with
+    | ITE c e1 e2 => if (termDenote c) then (mtermDenote e1) else mtermDenote e2
+    | RET e => termDenote e
+    end.  
+  
   Instance Nbe_int : Nbe <{{ Num }}> := {
     reify v := NUM v;
     reflect v := termDenote v;
@@ -162,25 +218,32 @@ Module Stlc(Import PF: GaloisField.GaloisField).
     reflect v := termDenote v;
                                   }.
 
-  Compute reify _ true.
-  Compute reify (Nbe_lam _ _) (fun x => x).
-  Compute reify (Nbe_lam _ _) (fun x => (fun y => y) true).
-  Compute reflect (Nbe_lam _ _) <{ \_, true }>.
-  Compute reify (Nbe_lam _ _ ) (fun x => (fun y => y) true).
-  Compute reflect (Nbe_lam _ _)
-          (reify (Nbe_lam _ _ ) (fun x => (fun y => y) true)).  
-  Compute reflect (Nbe_lam _ _ )
-          <{ (\x, \y, # x) true }>.
-
   Fixpoint resolver(t: type): Nbe t :=
     match t with
     | <{{ Bool }}> => Nbe_bool
     | <{{ Num }}> => Nbe_int
     | <{{ a -> b }}> => Nbe_lam (resolver a) (resolver b)
     end.
-    
+
+  (** This function does *partial* reflection of the object language while
+      maintaining the syntax of the metalanguage! *)
+  Fixpoint mreflect t (e: IM (Term typeDenote) t): IM typeDenote t :=
+    match e with
+    | @ITE _ <{{ a -> b }}> c e1 e2 =>
+      
+    | ITE c e1 e2 =>
+      ITE (BOOL (reflect (resolver <{{ Bool }}>) c))
+          (mreflect e1) (mreflect e2)
+    | RET e => RET (reflect (resolver _) e)
+    end.
+
+  (** Conversely, this function is dumb and uninteresting. Since we cannot
+      reify if-then-else statements from Gallina to IM *)
+  Definition mreify{t: type} (e: typeDenote t): IM (Term typeDenote) t :=
+    RET (reify (resolver t) e).
+
   Definition normalize {t: type} (e: Term typeDenote t) : Term typeDenote t :=
-    reify (resolver t) (reflect (resolver t) e).
+    reif (refl e).
                                        
   Inductive fof: type -> Prop :=
   | fo_bool: fof <{{ Bool }}>
@@ -192,22 +255,31 @@ Module Stlc(Import PF: GaloisField.GaloisField).
       fof <{{ a }}> ->
       fof <{{ Num -> a }}>.
 
+  Inductive value: forall (t: type), Term typeDenote t -> Prop :=
+  | Value_bool: forall x, @value <{{ Bool }}> (@VAR typeDenote <{{ Bool }}> x)
+  | Value_btrue: @value <{{ Bool }}> <{ true }>
+  | Value_bfalse: @value <{{ Bool }}> <{ false }>
+  | Value_var: forall x, @value <{{ Num }}> (@VAR typeDenote <{{ Num }}> x)
+  | Value_const: forall (x: Fp), @value <{{ Num }}> (NUM x).
+  
   Inductive hnff: forall (t: type), Term typeDenote t -> Prop :=
-  | HNF_bool_ar: forall a f (arg: typeDenote <{{ Bool }}>),
-      @hnff <{{ a }}> (f arg) ->
+  | HNF_bool_ar: forall a f,
+      (forall (arg: typeDenote <{{ Bool }}>), @hnff <{{ a }}> (f arg)) ->
       @hnff <{{ Bool -> a }}> (LAM f)
-  | HNF_num_ar: forall a f (arg: typeDenote <{{ Num }}>),
-      @hnff <{{ a }}> (f arg) ->
+  | HNF_num_ar: forall a f,
+      (forall (arg: typeDenote <{{ Num }}>), @hnff <{{ a }}> (f arg)) ->
       @hnff <{{ Num -> a }}> (LAM f)
   | HNF_bool: forall e,
-      @hnff <{{ Bool }}> (BOOL e)
+      value e ->
+      @hnff <{{ Bool }}> e
   | HNF_num: forall e,
-      @hnff <{{ Num }}> (NUM e).
+      value e ->
+      @hnff <{{ Num }}> e.
 
   (** Provide default witnesses for hnff *)
-  Hint Extern 3 (typeDenote <{{ Bool }}>) => exact (true).
+  (* Hint Extern 3 (typeDenote <{{ Bool }}>) => exact (true).
   Hint Extern 3 (typeDenote <{{ Num }}>) => exact (0:%p).
-
+  *)
   Theorem normalize_correct: forall (t: type) (e: Term typeDenote t),
       fof t  -> 
       @hnff t (@normalize t e).
@@ -216,96 +288,35 @@ Module Stlc(Import PF: GaloisField.GaloisField).
     generalize dependent e.
     generalize dependent H.
     induction t; intros; dependent destruction e; cbn; try constructor;
-      invert H; cbn; unshelve (econstructor; eauto)...
+      invert H; cbn; try constructor...
+    - destruct b; constructor.
+    - destruct (eq_field (termDenote e1) (termDenote e2)); constructor.
+    - destruct (termDenote e1); destruct (termDenote e2); constructor.
+    - destruct (termDenote e1); destruct (termDenote e2); constructor.
+    - destruct (termDenote e); constructor.
+    - destruct (termDenote e1); destruct (termDenote e2); destruct (termDenote e3); constructor.
+    - destruct ((termDenote e1 (termDenote e2))); constructor.
+    - destruct t; constructor.
   Defined.
 
-End Stlc.
 
-  (** * Correctness *)
+  Definition t: Term typeDenote <{{ Bool -> Bool }}> :=
+    <{ \x, (if # x then \y, # y else \z, ! # z) # x }>.
+  
+  Eval cbv in normalize t.
 
-  (**
-pterm_ind
-     : forall P : pterm -> Prop,
-       (forall v : var result, P (PHalt v)) ->
-       (forall (t : ptype) (v : var (t --->)) (v0 : var t), P (PApp v v0)) ->
-       (forall (t : ptype) (p : pprimop t) (p0 : var t -> pterm),
-        (forall v : var t, P (p0 v)) -> P (PBind p p0)) -> forall p : pterm, P p
-   *)
+  Eval cbv in reflect (resolver _) (reify (resolver <{{ Bool -> Bool }}>) f).
+  Eval cbv in reflect (resolver _) (normalize t) true.
 
-
-  Section splice_correct.
-    Variables result1 result2 : ptype.
-
-    Variable e2 : ptypeDenote result1 -> pterm ptypeDenote result2.  
-
-    Theorem splice_correct : forall e1 k,
-        ptermDenote (splice e1 e2) k
-        = ptermDenote e1 (fun r => ptermDenote (e2 r) k).
-      apply (pterm_mut
-               (fun e1 => forall k,
-                    ptermDenote (splice e1 e2) k
-                    = ptermDenote e1 (fun r => ptermDenote (e2 r) k))
-               (fun t p => forall k,
-                    pprimopDenote (splicePrim p e2) k
-                    = pprimopDenote p (fun r => ptermDenote (e2 r) k))); auto.
-      equation.
-    Qed.
-  End splice_correct.
-
-  Fixpoint lr (t : type) : typeDenote t -> ptypeDenote (cpsType t) -> Prop :=
-    match t return (typeDenote t -> ptypeDenote (cpsType t) -> Prop) with
-    | TBool => fun n1 n2 => n1 = n2
-    | TArrow t1 t2 => fun f1 f2 =>
-                       forall x1 x2, lr _ x1 x2
-                                -> forall k, exists r,
-                             f2 (x2, k) = k r
-                             /\ lr _ (f1 x1) r
-    end.
-
-  Lemma cpsTerm_correct : forall G t (e1 : term _ t) (e2 : term _ t),
-      term_equiv G e1 e2
-      -> (forall t v1 v2, In (vars (v1, v2)) G -> lr t v1 v2)
-      -> forall k, exists r,
-            ptermDenote (cpsTerm e2) k = k r
-            /\ lr t (termDenote e1) r.
-    Hint Rewrite splice_correct : ltamer.
-
-    Ltac my_changer :=
-      match goal with
-        [ H : (forall (t : _) (v1 : _) (v2 : _), vars _ = vars _ \/ In _ _ -> _) -> _ |- _ ] =>
-        match typeof H with
-        | ?P -> _ =>
-          assert P; [intros; push_vars; intuition; fail 2
-                    | idtac]
-        end
-      end.
-
-    Ltac my_simpler := repeat progress (equation; fold ptypeDenote in *;
-                                        fold cpsType in *; try my_changer).
-
-    Ltac my_chooser T k :=
-      match T with
-      | bool => fail 1
-      | type => fail 1
-      | ctxt _ _ => fail 1
-      | _ => default_chooser T k
-      end.
-
-    induction 1; matching my_simpler my_chooser; eauto.
-  Qed.
-
-  Theorem CpsTerm_correct : forall t (E : Term t),
-      forall k, exists r,
-          PtermDenote (CpsTerm E) k = k r
-          /\ lr t (TermDenote E) r.
-    unfold PtermDenote, TermDenote, CpsTerm; simpl; intros.
-    eapply (cpsTerm_correct (G := nil)); simpl; intuition.
-    apply Term_equiv.
-  Qed.
-
-  Theorem CpsTerm_correct_bool : forall (E : Term TBool),
-      forall k, PtermDenote (CpsTerm E) k = k (TermDenote E).
+  Example notnormal: @hnff <{{ Bool -> Bool }}> (normalize t).
+  Proof.
+    constructor.
     intros.
-    generalize (CpsTerm_correct E k); firstorder congruence.
+    constructor.
+    unfold t; simpl.
+    destruct arg.
+    - constructor.
+    - constructor.
   Qed.
-                                          
+
+End Stlc.

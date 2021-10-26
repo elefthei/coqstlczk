@@ -1,9 +1,9 @@
 Require Import Metalib.Metatheory.
 Require Import Bool.
 From STLCZK Require Import GaloisField.
-From STLCZK Require Import Stlc.
 From STLCZK Require Import R1cs.
 From STLCZK Require Import Ltac.
+From STLCZK Require Import Phoas.
 From STLCZK Require Import Relations.
 
 From Coq Require Import Vectors.VectorDef.
@@ -23,9 +23,7 @@ Module Anf(PF: GaloisField).
   | Value(v: value)
   with value: Set :=
   | Constant(c: constant)
-  | Var_f(s: var)
   | Var_b(v: nat)
-  | Lambda(e: anfexp) (** How to remove this? *)
   with aexp: Set :=
   | App(f: value)(v: value)
   | Select(c: value)(t: value)(e: value)

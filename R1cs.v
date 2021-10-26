@@ -140,7 +140,7 @@ Module R1CS(PF: GaloisField).
   Eval cbn in <[
                 { (3o + 3i[1]) * (3i[0] + 2v[2]) == ([1]) };
               { (3o + 3i[1]) * (3i[0] + 2v[2]) == ([1]) }  ]>.  
-
+  
   Lemma Nat_max_lub_if: forall n m p : nat, Nat.max n m <= p -> n <= p /\ m <= p.
   Proof. intros. split; lia. Defined.
 

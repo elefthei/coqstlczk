@@ -22,10 +22,10 @@ Module DivGadget(PF: GaloisField).
   Import VectorNotations.
 
   (** Example 1: Division *)
-  Definition div :=
-    <{ \_: Field, (F1 / #0) }>.
+  Definition inv :=
+    <{ \_: Field, (1:%p / #0) }>.
 
-  Definition div_fp_check :=
+  Definition inv_fp_check :=
     <{ \_: Field,
            (\_: Field,
                 (#0 * #1) == F1)
