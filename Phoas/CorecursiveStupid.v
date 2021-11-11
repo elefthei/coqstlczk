@@ -177,38 +177,17 @@ PTerm_LTerm_rec
     lnorm: LTerm typeDenote t -> LTerm typeDenote t
                         }.
   
-  (* This typechecks, don't touch it! *)
-  Program Fixpoint pnorm_arr{a b: type}
-          `{LNbe <{{ a -> b }}>} `{Nbe a} `{Nbe b} `{Nbe <{{Bool}}>}
-          (e: PTerm typeDenote <{{a -> b }}>) : PTerm typeDenote <{{ a -> b }}> :=
-    match e with
-    | ITE c e1 e2 =>
-      L (LAM (fun x => P (ITE (pnorm c)
-                           (L (lnorm (APP (P (pnorm_arr e1)) (VAR x))))
-                           (L (lnorm (APP (P (pnorm_arr e2)) (VAR x)))))))
-    | L p => L (lnorm_arr p)
-    (* Bogus terms *)
-    | ADD a b => ADD a b
-    | SUB a b => SUB a b
-    | MUL a b => MUL a b
-    | DIV a b => DIV a b
-    | EQ a b => EQ a b
-    | AND a b => AND a b
-    | OR a b => OR a b
-    | NOT a => NOT a
-    end
-  with lnorm_arr{a b: type}
-                `{LNbe <{{ a -> b }}>} `{Nbe a} `{Nbe b} `{Nbe <{{Bool}}>}
-                (e: LTerm typeDenote <{{a -> b }}>) : LTerm typeDenote <{{ a -> b }}> :=
-         match e with
-         | P p => P (pnorm_arr p)
-         | APP _ _ => reify (reflect e)
-         | LAM _ => reify (reflect e)
-         | VAR _ => reify (reflect e)
-         (* Bogus terms *)
-         | NUM f => NUM f
-         | BOOL v => BOOL v
-         end.
+  (* This is needed so instance resolution succeeds *)
+  Hint Extern 5 (Nbe ?X) =>
+  match goal with
+  | [ H : ?a =  <{{ ?b }}> |- ?g ] => idtac a b g; inversion H; subst; clear H; eauto
+  end: typeclass_instances.
+
+  Hint Extern 5 (LNbe ?X) =>
+  match goal with
+  | [ H : ?a =  <{{ ?b }}> |- ?g ] => idtac a b g; inversion H; subst; clear H; eauto
+  end: typeclass_instances.
+
 
   Program Fixpoint pnorm_num(e: PTerm typeDenote <{{ Num }}>): PTerm typeDenote <{{ Num }}> :=
       match e with
@@ -317,7 +296,7 @@ PTerm_LTerm_rec
          (* Bogus terms *)
          | NUM f => NUM f
          end.
-  
+    
   Instance Nbe_num : Nbe <{{ Num }}> := {
     pnorm := pnorm_num;
     lnorm := lnorm_num;
@@ -328,8 +307,40 @@ PTerm_LTerm_rec
     lnorm := lnorm_bool
                                         }.
 
+  
+  Program Fixpoint lnorm_arr{a b: type} `{Nbe <{{ Bool }}>}
+          `{LNbe a} `{LNbe b} `{Nbe a} `{Nbe b} `{Nbe <{{Bool}}>}
+          (e: LTerm typeDenote <{{a -> b }}>) : LTerm typeDenote <{{ a -> b }}> :=
+    match e with
+    | P p => P (pnorm_arr p)
+    | APP e1 e2 => reify (reflect e)
+    | LAM e' => LAM (fun x => lnorm (e' x))
+    | VAR _ => reify (reflect e)
+    (* Bogus terms *)
+    | NUM f => NUM f
+    | BOOL v => BOOL v
+    end
+  with pnorm_arr{a b: type}
+          `{LNbe a} `{LNbe b} `{Nbe <{{Bool}}>} `{Nbe a} `{Nbe b}
+          (e: PTerm typeDenote <{{a -> b }}>) : PTerm typeDenote <{{ a -> b }}> :=
+    match e with
+    | ITE c e1 e2 =>
+      L (LAM (fun x => P (ITE (pnorm c)
+                           (L (lnorm (APP (P (pnorm_arr e1)) (VAR x))))
+                           (L (lnorm (APP (P (pnorm_arr e2)) (VAR x)))))))
+    | L p => L (lnorm_arr p)
+    (* Bogus terms *)
+    | ADD a b => ADD a b
+    | SUB a b => SUB a b
+    | MUL a b => MUL a b
+    | DIV a b => DIV a b
+    | EQ a b => EQ a b
+    | AND a b => AND a b
+    | OR a b => OR a b
+    | NOT a => NOT a
+    end.
                                                      
-  Instance Nbe_lam {a b: type} `(Nbe a) `(Nbe b) `(LNbe <{{ a -> b }}>): Nbe <{{ a -> b }}> := {
+  Instance Nbe_lam {a b: type} `(Nbe a) `(Nbe b) `(LNbe a) `(LNbe b): Nbe <{{ a -> b }}> := {
     pnorm := pnorm_arr;
     lnorm := lnorm_arr
                                                                                             }.
@@ -368,7 +379,7 @@ PTerm_LTerm_rec
   Notation "x == y" := (EQ x y) (in custom stlc at level 3,
                                       left associativity).
   Notation "! x " := (NOT x) (in custom stlc at level 3).
-  Notation "'if' x 'then' y 'else' z" :=
+  Notation "'ifi' x 'then' y 'else' z" :=
     (ITE x y z) (in custom stlc at level 89,
                     x custom stlc at level 99,
                     y custom stlc at level 99,
@@ -378,6 +389,12 @@ PTerm_LTerm_rec
   Coercion P: PTerm >-> LTerm.
   Coercion L: LTerm >-> PTerm.
 
+  Definition t: LTerm typeDenote <{{ Bool -> Bool }}> :=
+    <{ \x, (ifi # x then \y, # y else \z, ! # z) # x }>.
+
+  Print t.
+  Eval cbv in lnorm_arr t.
+  
   Inductive fof: type -> Prop :=
   | fo_bool: fof <{{ Bool }}>
   | fo_num: fof <{{ Num }}>
@@ -408,24 +425,6 @@ PTerm_LTerm_rec
   | HNF_num: forall e,
       value e ->
       @hnff <{{ Num }}> e.
-
-  (* Undecidable instance resolution sucks *)
-  Fixpoint resolver(t: type): Nbe t :=
-    match t with
-    | <{{ Bool }}> => Nbe_bool
-    | <{{ Num }}> => Nbe_num
-    | <{{ a -> b }}> => Nbe_lam (resolver a) (resolver b)
-                              (LNbe_lam (lresolver a) (lresolver b))
-    end
-  with lresolver(t: type): LNbe t :=
-    match t with
-    | <{{ Bool }}> => LNbe_bool
-    | <{{ Num }}> => LNbe_num
-    | <{{ a -> b }}> => LNbe_lam (lresolver a) (lresolver b)
-    end.
-
-  Definition normalize t (e: LTerm typeDenote t): LTerm typeDenote t :=
-    @lnorm t (resolver t) e.
   
   (** Provide default witnesses for hnff *)
   (* Hint Extern 3 (typeDenote <{{ Bool }}>) => exact (true).
@@ -447,10 +446,7 @@ PTerm_LTerm_rec
     - admit. 
   Admitted.
 
-  Definition t: LTerm typeDenote <{{ Bool -> Bool }}> :=
-    <{ \x, (if # x then \y, # y else \z, ! # z) # x }>.
-  
-  Eval cbv in normalize t.
+
 
   Example notnormal: @hnff <{{ Bool -> Bool }}> (normalize t).
   Proof.
