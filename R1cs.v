@@ -1,4 +1,3 @@
-Require Import Metalib.Metatheory.
 From STLCZK Require Import GaloisField.
 From STLCZK Require Import Ltac.
 From STLCZK Require Import NonEmpty.
@@ -12,39 +11,42 @@ Require Import Coq.Init.Nat.
 Require Import Coq.Vectors.VectorDef.
 Require Import Coq.Vectors.Fin.
 
-Set Implicit Arguments.
-Set Printing Implicit.
+From Equations Require Import Equations.
+From Coq Require Import Program.Program.
 
 Module R1CS(PF: GaloisField).
   Import PF.
   Import VectorNotations.
-  Definition Vfp := Vector.t Fp.
+  Definition V := Vector.t. 
 
   Inductive term: Set :=
   | input(n: nat): term
   | var(n: nat): term
   | output: term
   | one: term.
-
-  Local Open Scope nat_scope.
   
-  Definition term_eq(a b: term): bool :=
-    match a,b with
-    | input n, input n' => n =? n'
-    | var n, var n' => n =? n'
-    | output, output => true
-    | one, one => true
-    | _, _ => false
-    end.  
-                                 
-  Definition additions :=
-    NonEmpty (Fp*term).
+  Definition additions := NonEmpty (Fp*term).
   
   Inductive constraint: Set :=
   | lc (A: additions) (B: additions) (C: additions).
 
   Definition r1cs :=
     NonEmpty constraint.
+
+  From Equations Require Import Equations.
+  From Coq Require Import Program.Program.
+
+  Derive NoConfusion for term.
+  Equations term_eq (a b: term): { a = b } + { a <> b } :=
+    term_eq (input n) (input n') := if eq_dec n n' then in_left else in_right;
+    term_eq (var n) (var n') := if eq_dec n n' then in_left else in_right;
+    term_eq output output := in_left;
+    term_eq one one := in_left;
+    term_eq _ _ := in_right.
+                             
+  #[global] Program Instance term_eqdec: EqDec term := {
+      eq_dec a b := term_eq a b
+    }.
 
   Class Computable(A : Type)(R: Type) :=
     {

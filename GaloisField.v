@@ -2,7 +2,6 @@
 Require Import Bool.
 Require Import Metalib.Metatheory.
 Require Import List.
-Require Import Ott.ott_list_core.
 
 (** For F_p *)
 Require Import Coqprime.elliptic.ZEll.
@@ -19,6 +18,10 @@ From STLCZK Require Import Ltac.
 
 Set Implicit Arguments.
 
+From Coq Require Import Classes.EquivDec.
+From Coq Require Import Logic.Decidable.
+From Coq Require Import Classes.Equivalence.
+
 Module Type GaloisField.
   (** Prime  *)
   Parameter p: Z.
@@ -27,8 +30,7 @@ Module Type GaloisField.
   Definition Fp: Set := pK p.
   Definition to_p x:Fp := GZnZ.mkznz _ _ (GZnZ.modz _  x).
   Notation "x :%p" := (to_p x) (at level 1).
-  
-  
+    
   Definition p_gt0 : 0 < p.
   Proof.
     pose proof (p_prime).

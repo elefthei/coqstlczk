@@ -1,8 +1,6 @@
-Require Import Metalib.Metatheory.
-From STLCZK Require Import Stlc.
-From STLCZK Require Import Gadgets.
 From STLCZK Require Import R1cs.
 From STLCZK Require Import GaloisField.
+From STLCZK Require Import Gadgets.
 From STLCZK Require Import Ltac.
 
 Require Import Coqprime.elliptic.ZEll.

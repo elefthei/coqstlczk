@@ -2,7 +2,6 @@
 Require Import Bool.
 Require Import Metalib.Metatheory.
 Require Import List.
-Require Import Ott.ott_list_core.
 
 (** For F_p *)
 Require Import Coqprime.elliptic.ZEll.
