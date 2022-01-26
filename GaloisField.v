@@ -2,7 +2,6 @@
 Require Import Bool.
 Require Import Metalib.Metatheory.
 Require Import List.
-Require Import Ott.ott_list_core.
 
 (** For F_p *)
 Require Import Coqprime.elliptic.ZEll.
@@ -15,8 +14,6 @@ Import Z.
 From Coq Require Import Ring.
 From Coq Require Import Field.
 
-From STLCZK Require Import Ltac.
-
 Set Implicit Arguments.
 
 Module Type GaloisField.
@@ -28,16 +25,12 @@ Module Type GaloisField.
   Definition to_p x:Fp := GZnZ.mkznz _ _ (GZnZ.modz _  x).
   Notation "x :%p" := (to_p x) (at level 1).
   
-  
   Definition p_gt0 : 0 < p.
   Proof.
     pose proof (p_prime).
     inversion H.
-    apply Z.lt_gt in H0.
-    apply Z.gt_lt.
-    apply gt_relax.
-    cbn.
-    exact H0.
+    apply Z.lt_lt_succ_r in H0.
+    lia. 
   Defined.
 
   Hint Resolve p_gt0: pk.
@@ -138,13 +131,13 @@ Module Type GaloisField.
     apply GZnZ.zirr.
     rewrite Zmult_comm.
     pose proof (p_prime).
-    invert H.
+    inversion H; clear H; subst.
     rewrite Z.mod_0_l.
     cbn.
     reflexivity.    
     intro Hcontra.    
     rewrite Hcontra in H0.
-    invert H0.
+    inversion H0.
   Qed.
   
   Lemma Rmul_zero_l: forall w, pkmul 0:%p w = 0:%p.
@@ -162,11 +155,11 @@ Module Type GaloisField.
      rewrite Z.mod_0_l.
      rewrite Z.mod_1_l.
      intro.
-     invert H1.
+     inversion H1.
      assumption.
      intro.
      rewrite H1 in H.
-     invert H.
+     inversion H.
    Qed.
    Hint Resolve mod_0_neq_1: pk.
    
@@ -246,7 +239,7 @@ Module Type GaloisField.
      rewrite Rmul_comm.
      rewrite Rmul_1_l.
      intro.
-     invert H.
+     inversion H.
      apply mod_0_neq_min_1 in H1.
      inversion H1.
    Qed.
@@ -274,7 +267,7 @@ Module Type GaloisField.
    Proof.
      intros.
      destruct FTH.
-     invert F_R.
+     inversion F_R; subst; clear F_R.
 
      split.
      intro Hcontra;
@@ -334,7 +327,7 @@ Module Type GaloisField.
      cbn in *.
      apply zirr.
      cbn.
-     invert H0.
+     inversion H0.
      cbn in H2.
    Admitted.
      
@@ -343,7 +336,7 @@ Module Type GaloisField.
    Proof.
      intros.
      destruct (FTH).
-     invert F_R.
+     inversion F_R.
      destruct (eq_field a 0:%p).
      (** a = 0 *)
      subst.

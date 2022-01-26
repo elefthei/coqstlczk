@@ -2,7 +2,6 @@
 Require Import Bool.
 Require Import Metalib.Metatheory.
 Require Import List.
-Require Import Ott.ott_list_core.
 
 (** For F_p *)
 Require Import Coqprime.elliptic.ZEll.
@@ -21,7 +20,7 @@ Require Import Coq.ZArith.BinIntDef.
 Import Z.
 Require Import Coq.ZArith.BinInt.
 
-Lemma gt_relax: forall (m n: Z), m > Z.succ n -> m > n. lia. Qed.
+
 
 Lemma vec1_proj {T} : forall (v:Vector.t T 1), exists a, v = [a].
   intros.

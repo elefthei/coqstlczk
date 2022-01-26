@@ -17,8 +17,7 @@ Definition env := pmap const.
 
 Inductive type :=
 | TBool: type
-| TNum: type
-| TUnit: type.
+| TNum: type.
 
 (* | TArray: nat -> type -> type. *)
 
