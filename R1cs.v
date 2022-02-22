@@ -1,18 +1,22 @@
-From STLCZK Require Import GaloisField.
-From STLCZK Require Import Ltac.
-From STLCZK Require Import NonEmpty.
-From Coq Require Import micromega.Lia.
-Require Import Coqprime.elliptic.ZEll.
-Require Import Coq.Numbers.BinNums.
-Require Import Coqprime.elliptic.GZnZ.
-Require Import Coq.ZArith.BinIntDef.
-Import Z.
-Require Import Coq.Init.Nat.
-Require Import Coq.Vectors.VectorDef.
-Require Import Coq.Vectors.Fin.
+From STLCZK Require Import
+     GaloisField
+     Ltac
+     NonEmpty.
+
+From Coq Require Import
+     micromega.Lia
+     Numbers.BinNums
+     Arith.Arith
+     ZArith.BinIntDef
+     Init.Nat
+     Vectors.VectorDef
+     Vectors.Fin.
+
+From Coqprime Require Import
+     elliptic.ZEll
+     elliptic.GZnZ.
 
 From Equations Require Import Equations.
-From Coq Require Import Program.Program.
 
 Module R1CS(PF: GaloisField).
   Import PF.
@@ -33,20 +37,18 @@ Module R1CS(PF: GaloisField).
   Definition r1cs :=
     NonEmpty constraint.
 
-  From Equations Require Import Equations.
-  From Coq Require Import Program.Program.
+  #[global] Instance term_eqdec: EqDec term.
+  red; decide equality; apply nat_eqdec.
+  Defined.
 
-  Derive NoConfusion for term.
-  Equations term_eq (a b: term): { a = b } + { a <> b } :=
-    term_eq (input n) (input n') := if eq_dec n n' then in_left else in_right;
-    term_eq (var n) (var n') := if eq_dec n n' then in_left else in_right;
-    term_eq output output := in_left;
-    term_eq one one := in_left;
-    term_eq _ _ := in_right.
-                             
-  #[global] Program Instance term_eqdec: EqDec term := {
-      eq_dec a b := term_eq a b
-    }.
+  #[global] Instance additions_eqdec: EqDec additions.
+  red; decide equality; destruct a, p0; decide equality;
+    (apply term_eqdec || apply fp_eqdec).
+  Defined.
+
+  #[global] Instance contstraint_eqdec: EqDec constraint.
+  red; decide equality; apply additions_eqdec.
+  Defined.
 
   Class Computable(A : Type)(R: Type) :=
     {
@@ -74,8 +76,8 @@ Module R1CS(PF: GaloisField).
     eval{i v}(a: A):
                      num_inputs a <= i ->
                      num_vars a <= v -> 
-                     Vfp i ->
-                     Vfp v ->
+                     V Fp i ->
+                     V Fp v ->
                      Fp ->
                      R;
     
@@ -144,8 +146,9 @@ Module R1CS(PF: GaloisField).
               { (3o + 3i[1]) * (3i[0] + 2v[2]) == ([1]) }  ]>.  
   
   Lemma Nat_max_lub_if: forall n m p : nat, Nat.max n m <= p -> n <= p /\ m <= p.
-  Proof. intros. split; lia. Defined.
+  Proof. intros; split; lia. Defined.
 
+  Search compare.
   #[refine] Instance term_Computable: Computable term Fp :=
     {
     subst t n k :=
@@ -158,7 +161,7 @@ Module R1CS(PF: GaloisField).
       | _ => t
       end;
 
-      rewrite trm t t' := if term_eq t trm then t' else
+      rewrite trm t t' := if eq_dec t trm then t' else
                             match t, trm with
                             | input a, input b => if a <? b then input (b-1) else trm
                             | var a, var b => if a <? b then var (b-1) else trm
@@ -276,10 +279,10 @@ Module R1CS(PF: GaloisField).
      wf a := True
     }.
   intros i v a H H0 inps vars out; destruct a eqn:Ha; subst.
-  destruct (Nat_max_lub_if _ _ H); clear H.
-  destruct (Nat_max_lub_if _ _ H0); clear H0.
-  destruct (Nat_max_lub_if _ _ H2); clear H2.
-  destruct (Nat_max_lub_if _ _ H3); clear H3.
+  destruct (Nat_max_lub_if _ _ _ H); clear H.
+  destruct (Nat_max_lub_if _ _ _ H0); clear H0.
+  destruct (Nat_max_lub_if _ _ _ H2); clear H2.
+  destruct (Nat_max_lub_if _ _ _ H3); clear H3.
   pose proof (eval A H1 H inps vars out) as RA.
   pose proof (eval B H0 H2 inps vars out) as RB.
   pose proof (eval C H4 H5 inps vars out) as RC.
@@ -319,9 +322,9 @@ Module R1CS(PF: GaloisField).
   Defined.
 
   Definition correct(r: r1cs)
-             (inputs: Vfp (num_inputs r))
+             (inputs: V Fp (num_inputs r))
              (output: Fp)
-             (vars: Vfp (num_vars r)): Prop :=
+             (vars: V Fp (num_vars r)): Prop :=
     @eval r1cs Prop r1cs_Computable
      (@num_inputs r1cs Prop r1cs_Computable r)
      (@num_vars r1cs Prop r1cs_Computable r)
@@ -333,7 +336,6 @@ Module R1CS(PF: GaloisField).
      output.     
 
   Import VectorNotations.
-  Unset Printing Implicit.
 
   Lemma example_correct1:
     correct <[ { (1i[0]) * (1i[1]) == (1o) } ]> [1:%p; 1:%p] 1:%p [].
@@ -367,7 +369,7 @@ Module R1CS(PF: GaloisField).
       (<[ { (1i[0] + [-1]) * ([1] + -1i[1]) == (1o + [-1]) } ]>) (* orb i[0] i[1] *)
       1.
 
-  Definition WF_inputs{i v}(r: r1cs)(inputs: Vfp i)(vars: Vfp v) :=
+  Definition WF_inputs{i v}(r: r1cs)(inputs: V Fp i)(vars: V Fp v) :=
     num_vars r = v /\ num_inputs r  = i.    
 
 End R1CS.

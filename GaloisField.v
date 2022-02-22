@@ -1,17 +1,20 @@
 (** For F_p *)
-Require Import Coqprime.elliptic.ZEll.
-Require Import Coq.ZArith.Znumtheory.
-Require Import Coq.ZArith.BinInt.
-Require Import Coqprime.elliptic.GZnZ.
-Require Import Coq.ZArith.BinIntDef.
-Require Import Coq.micromega.Lia.
-Import Z.
-From Coq Require Import Ring.
-From Coq Require Import Field.
+From Coqprime Require Import
+     elliptic.ZEll
+     elliptic.GZnZ.
 
-Set Implicit Arguments.
+From Coq Require Import
+     ZArith.Znumtheory
+     ZArith.BinInt
+     ZArith.BinIntDef
+     micromega.Lia
+     Field
+     Ring.
 
 From Equations Require Import Equations.
+Import Z.
+
+Set Implicit Arguments.
 
 Module Type GaloisField.
   (** Prime  *)
@@ -75,17 +78,16 @@ Module Type GaloisField.
   Qed.
   Hint Rewrite Rmul_1_r: pk.
 
-  #[global] Instance Fp_EqDec: EqDec Fp.
-  red.
-  intros.
-  unfold Fp in *.
-  unfold pK in *.
+  (** Decidable equality for F_p *)
+  #[global] Instance fp_eqdec: EqDec Fp.
+  red; intros; unfold Fp in *; unfold pK in *.
   destruct x as (x0, Hx_mod), y as (y0, Hy_mod).
   pose proof (Z.eq_dec x0 y0).
   inversion H.
   - left; exact (GZnZ.zirr p x0 y0 Hx_mod Hy_mod H0).
   - right; intro; inversion H1; contradiction.
-    
+  Defined.
+  
   Lemma Ropp_pkmul: forall (a: Fp),
        pkopp a = pkmul (-1):%p a.
   Proof.
@@ -314,7 +316,7 @@ Module Type GaloisField.
        b <> 0:%p -> pkmul a b = 0:%p -> a = 0:%p.
    Proof.
      intros.
-     destruct (eq_field a 0:%p).
+     destruct (eq_dec a 0:%p).
      assumption.
      destruct a.
      destruct b.
@@ -332,7 +334,7 @@ Module Type GaloisField.
      intros.
      destruct (FTH).
      inversion F_R.
-     destruct (eq_field a 0:%p).
+     destruct (eq_dec a 0:%p).
      (** a = 0 *)
      subst.
      destruct (pKfth p_prime).
